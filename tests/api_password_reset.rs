@@ -208,8 +208,176 @@ async fn json_malforme_400() {
     let db = test_db().await;
     let (state, _) = test_state_with_outbox(&db).await;
 
-    let response = post_json(router(state), "/password/forgot", "pas du json", &[]).await;
-    assert_eq!(response.status, StatusCode::BAD_REQUEST);
+    for path in ["/password/forgot", "/password/reset"] {
+        let response = post_json(router(state.clone()), path, "pas du json", &[]).await;
+        assert_eq!(response.status, StatusCode::BAD_REQUEST, "route : {path}");
+    }
+
+    db.drop().await.unwrap();
+}
+
+// ---------------------------------------------------------------------------
+// US-18 — POST /password/reset
+// ---------------------------------------------------------------------------
+
+/// Déclenche un forgot et rend le token en clair capturé dans l'email.
+async fn forgot_and_capture_token(
+    state: &ch_api_authenticator::state::AppState,
+    outbox: &std::sync::Arc<
+        std::sync::Mutex<Vec<ch_api_authenticator::services::mailer::SentEmail>>,
+    >,
+    email: &str,
+) -> String {
+    outbox.lock().unwrap().clear();
+    let response = post_json(
+        router(state.clone()),
+        "/password/forgot",
+        &format!(r#"{{"email": "{email}"}}"#),
+        &[],
+    )
+    .await;
+    assert_eq!(response.status, StatusCode::ACCEPTED);
+    let email = wait_for_email(outbox).await;
+    email
+        .body
+        .split("token=")
+        .nth(1)
+        .unwrap()
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .to_string()
+}
+
+#[tokio::test]
+async fn parcours_complet_forgot_reset_login() {
+    let db = test_db().await;
+    let (state, outbox) = test_state_with_outbox(&db).await;
+    seed_user(&state, "martin@test.fr", HashMap::new()).await;
+    let token = forgot_and_capture_token(&state, &outbox, "martin@test.fr").await;
+
+    // Reset avec le token du lien.
+    let reset = post_json(
+        router(state.clone()),
+        "/password/reset",
+        &format!(r#"{{"token": "{token}", "new_password": "nouveau-mdp-solide"}}"#),
+        &[],
+    )
+    .await;
+    assert_eq!(reset.status, StatusCode::OK);
+
+    // Le nouveau mot de passe fonctionne, l'ancien est refusé.
+    login_token_with(&state, "martin@test.fr", "nouveau-mdp-solide").await;
+    let ancien = post_json(
+        router(state.clone()),
+        "/login",
+        &format!(r#"{{"email": "martin@test.fr", "password": "{PASSWORD}"}}"#),
+        &[],
+    )
+    .await;
+    assert_eq!(ancien.status, StatusCode::UNAUTHORIZED);
+
+    // Le hash en base est bien de l'Argon2id tout neuf.
+    let stored = state
+        .users
+        .find_by_email("martin@test.fr")
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(stored.password_hash.starts_with("$argon2id$"));
+
+    db.drop().await.unwrap();
+}
+
+#[tokio::test]
+async fn token_a_usage_strictement_unique() {
+    let db = test_db().await;
+    let (state, outbox) = test_state_with_outbox(&db).await;
+    seed_user(&state, "martin@test.fr", HashMap::new()).await;
+    let token = forgot_and_capture_token(&state, &outbox, "martin@test.fr").await;
+
+    let body = format!(r#"{{"token": "{token}", "new_password": "nouveau-mdp-solide"}}"#);
+    let premier = post_json(router(state.clone()), "/password/reset", &body, &[]).await;
+    assert_eq!(premier.status, StatusCode::OK);
+
+    // Rejeu du même token → 400 générique.
+    let rejeu = post_json(router(state), "/password/reset", &body, &[]).await;
+    assert_eq!(rejeu.status, StatusCode::BAD_REQUEST);
+
+    db.drop().await.unwrap();
+}
+
+#[tokio::test]
+async fn token_inconnu_ou_expire_400_generique() {
+    let db = test_db().await;
+    let (state, _) = test_state_with_outbox(&db).await;
+    let user = seed_user(&state, "martin@test.fr", HashMap::new()).await;
+
+    // Token inconnu.
+    let inconnu = post_json(
+        router(state.clone()),
+        "/password/reset",
+        r#"{"token": "0000000000000000000000000000000000000000000000000000000000000000", "new_password": "nouveau-mdp-solide"}"#,
+        &[],
+    )
+    .await;
+    assert_eq!(inconnu.status, StatusCode::BAD_REQUEST);
+
+    // Token expiré : enregistré avec un TTL nul.
+    let token = ch_api_authenticator::services::reset_token::generate();
+    state
+        .reset_tokens
+        .replace_for_user(
+            user.id.unwrap(),
+            &ch_api_authenticator::services::reset_token::hash(&token),
+            Duration::ZERO,
+        )
+        .await
+        .unwrap();
+    let expire = post_json(
+        router(state.clone()),
+        "/password/reset",
+        &format!(r#"{{"token": "{token}", "new_password": "nouveau-mdp-solide"}}"#),
+        &[],
+    )
+    .await;
+    assert_eq!(expire.status, StatusCode::BAD_REQUEST);
+
+    // Les deux réponses sont identiques (sans distinguer la cause).
+    assert_eq!(inconnu.body, expire.body);
+
+    db.drop().await.unwrap();
+}
+
+#[tokio::test]
+async fn mot_de_passe_trop_court_ne_brule_pas_le_token() {
+    let db = test_db().await;
+    let (state, outbox) = test_state_with_outbox(&db).await;
+    seed_user(&state, "martin@test.fr", HashMap::new()).await;
+    let token = forgot_and_capture_token(&state, &outbox, "martin@test.fr").await;
+
+    // Mot de passe trop court → 400, mais le token doit rester utilisable.
+    let court = post_json(
+        router(state.clone()),
+        "/password/reset",
+        &format!(r#"{{"token": "{token}", "new_password": "court"}}"#),
+        &[],
+    )
+    .await;
+    assert_eq!(court.status, StatusCode::BAD_REQUEST);
+
+    let retry = post_json(
+        router(state),
+        "/password/reset",
+        &format!(r#"{{"token": "{token}", "new_password": "nouveau-mdp-solide"}}"#),
+        &[],
+    )
+    .await;
+    assert_eq!(
+        retry.status,
+        StatusCode::OK,
+        "le token ne doit pas être consommé par un essai invalide"
+    );
 
     db.drop().await.unwrap();
 }

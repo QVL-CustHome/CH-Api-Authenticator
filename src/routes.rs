@@ -16,6 +16,7 @@ pub fn router(state: AppState) -> Router {
         .route("/login", post(handlers::login::login))
         .route("/validate", get(handlers::validate::validate))
         .route("/password/forgot", post(handlers::password::forgot))
+        .route("/password/reset", post(handlers::password::reset))
         // Endpoints protégés par l'auth interne (US-13).
         .route(
             "/me",
