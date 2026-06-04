@@ -1,0 +1,28 @@
+[package]
+name = "ch-api-authenticator"
+version = "0.1.0"
+edition = "2024"
+description = "Microservice d'authentification multi-portail CustHome"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+mongodb = "3"
+argon2 = "0.5"
+# Active OsRng pour la génération des sels Argon2 (rand_core de password-hash).
+rand_core = { version = "0.6", features = ["getrandom"] }
+jsonwebtoken = "9"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+validator = { version = "0.20", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+figment = { version = "0.10", features = ["toml", "env"] }
+ipnet = "2"
+tower-http = { version = "0.6", features = ["trace"] }
+dotenvy = "0.15"
+thiserror = "2"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"

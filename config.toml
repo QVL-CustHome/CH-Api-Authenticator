@@ -1,0 +1,22 @@
+# Configuration non sensible de CH-Api-Authenticator (US-00).
+# Surcharge possible par variables d'environnement préfixées CH__ (ex. CH__SERVER__PORT=9000).
+# Les secrets (JWT_SECRET, MONGO_URI…) viennent exclusivement de l'environnement — voir .env.example.
+
+[server]
+# Port attendu par la Gateway (auth_service_url dans son config.yaml).
+port = 8081
+# Verbosité des logs : DEBUG, INFO, WARN, ERROR (cohérent avec la Gateway).
+log_level = "INFO"
+
+[token]
+# Durée de vie de l'access token JWT, en minutes.
+ttl_minutes = 15
+# Cookie HttpOnly posé au login (US-03), lu par la Gateway (US-11).
+cookie_name = "ch_token"
+# false uniquement en dev local (pas de HTTPS) — true en production.
+cookie_secure = false
+
+[registration]
+# Rôles attribués automatiquement à l'inscription : { portail = "rôle" }.
+# Vide par défaut : l'attribution passe par les endpoints super-admin (sprint 2).
+default_roles = {}
