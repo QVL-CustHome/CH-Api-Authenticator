@@ -14,6 +14,8 @@ pub fn router(state: AppState) -> Router {
         .route("/ping", get(handlers::ping::ping))
         .route("/register", post(handlers::register::register))
         .route("/login", post(handlers::login::login))
+        .route("/refresh", post(handlers::session::refresh))
+        .route("/logout", post(handlers::session::logout))
         .route("/validate", get(handlers::validate::validate))
         .route("/password/forgot", post(handlers::password::forgot))
         .route("/password/reset", post(handlers::password::reset))

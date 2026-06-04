@@ -5,7 +5,7 @@ mod common;
 
 use axum::http::StatusCode;
 use ch_api_authenticator::routes::router;
-use ch_api_authenticator::services::reset_token;
+use ch_api_authenticator::services::secure_token;
 use common::*;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -94,7 +94,7 @@ async fn email_envoye_avec_le_lien_et_token_hashe_en_base() {
 
     let stored = state
         .reset_tokens
-        .consume(&reset_token::hash(&token))
+        .consume(&secure_token::hash(&token))
         .await
         .unwrap()
         .expect("le hash du token du lien doit exister en base");
@@ -161,7 +161,7 @@ async fn nouvelle_demande_invalide_la_precedente() {
     assert!(
         state
             .reset_tokens
-            .consume(&reset_token::hash(&premier))
+            .consume(&secure_token::hash(&premier))
             .await
             .unwrap()
             .is_none(),
@@ -170,7 +170,7 @@ async fn nouvelle_demande_invalide_la_precedente() {
     assert!(
         state
             .reset_tokens
-            .consume(&reset_token::hash(&second))
+            .consume(&secure_token::hash(&second))
             .await
             .unwrap()
             .is_some(),
@@ -324,12 +324,12 @@ async fn token_inconnu_ou_expire_400_generique() {
     assert_eq!(inconnu.status, StatusCode::BAD_REQUEST);
 
     // Token expiré : enregistré avec un TTL nul.
-    let token = ch_api_authenticator::services::reset_token::generate();
+    let token = ch_api_authenticator::services::secure_token::generate();
     state
         .reset_tokens
         .replace_for_user(
             user.id.unwrap(),
-            &ch_api_authenticator::services::reset_token::hash(&token),
+            &ch_api_authenticator::services::secure_token::hash(&token),
             Duration::ZERO,
         )
         .await

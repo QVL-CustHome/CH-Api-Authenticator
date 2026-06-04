@@ -86,6 +86,8 @@ pub fn state_with_mailer(
                     ttl_minutes: 15,
                     cookie_name: "ch_token".to_string(),
                     cookie_secure,
+                    refresh_ttl_days: 7,
+                    refresh_cookie_name: "ch_refresh".to_string(),
                 },
                 registration: RegistrationConfig { default_roles },
                 email: EmailConfig::default(),
@@ -156,7 +158,10 @@ pub fn roles(entries: &[(&str, &str)]) -> HashMap<String, String> {
 /// Réponse HTTP dépouillée pour les assertions.
 pub struct TestResponse {
     pub status: StatusCode,
+    /// Premier Set-Cookie (le cookie d'access token, posé en premier).
     pub set_cookie: Option<String>,
+    /// Tous les Set-Cookie (access + refresh depuis l'US-19).
+    pub set_cookies: Vec<String>,
     pub correlation_id: Option<String>,
     pub body: serde_json::Value,
 }
@@ -187,10 +192,13 @@ pub async fn get(app: Router, path: &str, headers: &[(&str, &str)]) -> TestRespo
 async fn send(app: Router, request: Request<Body>) -> TestResponse {
     let response = app.oneshot(request).await.unwrap();
     let status = response.status();
-    let set_cookie = response
+    let set_cookies: Vec<String> = response
         .headers()
-        .get(header::SET_COOKIE)
-        .map(|v| v.to_str().unwrap().to_string());
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .map(|v| v.to_str().unwrap().to_string())
+        .collect();
+    let set_cookie = set_cookies.first().cloned();
     let correlation_id = response
         .headers()
         .get(ch_api_authenticator::middleware::tracing::CORRELATION_HEADER)
@@ -200,6 +208,7 @@ async fn send(app: Router, request: Request<Body>) -> TestResponse {
     TestResponse {
         status,
         set_cookie,
+        set_cookies,
         correlation_id,
         body,
     }

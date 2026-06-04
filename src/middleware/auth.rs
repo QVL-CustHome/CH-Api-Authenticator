@@ -110,6 +110,8 @@ mod tests {
                         ttl_minutes: 15,
                         cookie_name: "ch_token".to_string(),
                         cookie_secure: false,
+                        refresh_ttl_days: 7,
+                        refresh_cookie_name: "ch_refresh".to_string(),
                     },
                     registration: RegistrationConfig::default(),
                     email: EmailConfig::default(),

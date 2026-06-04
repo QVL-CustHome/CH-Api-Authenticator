@@ -1,8 +1,9 @@
-//! Tokens de réinitialisation de mot de passe (US-17).
+//! Tokens opaques sécurisés : reset de mot de passe (US-17) et
+//! refresh tokens (US-19).
 //!
-//! Le token envoyé par email est un secret one-time de 32 octets aléatoires ;
-//! seul son hash SHA-256 est stocké en base — un dump de la base ne permet
-//! pas de réinitialiser un compte.
+//! Le token remis au client est un secret de 32 octets aléatoires ;
+//! seul son hash SHA-256 est stocké en base — un dump de la base ne
+//! permet ni de réinitialiser un compte ni de rejouer une session.
 
 use rand_core::{OsRng, RngCore};
 use sha2::{Digest, Sha256};

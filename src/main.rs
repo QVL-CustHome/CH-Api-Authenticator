@@ -44,10 +44,11 @@ async fn main() {
 
     let state = AppState::new(settings, db, mailer);
 
-    // US-01/US-17 : index (email unique, TTL des tokens de reset), idempotents.
+    // US-01/US-17/US-19 : index (email unique, TTL des tokens), idempotents.
     let indexes = async {
         state.users.ensure_indexes().await?;
-        state.reset_tokens.ensure_indexes().await
+        state.reset_tokens.ensure_indexes().await?;
+        state.refresh_tokens.ensure_indexes().await
     };
     if let Err(e) = indexes.await {
         tracing::error!(error = %e, "Création des index impossible");
