@@ -15,9 +15,10 @@ pub enum AppError {
     /// Token absent, malformé, expiré, falsifié ou lié à une autre IP (US-05).
     #[error("token invalide ou expiré")]
     InvalidToken,
-    /// Token valide mais aucun rôle sur le portail visé (US-05).
-    #[error("aucun rôle sur ce portail")]
-    Forbidden,
+    /// Token valide mais accès refusé : aucun rôle sur le portail (US-05),
+    /// ou endpoint réservé au super-admin (US-13).
+    #[error("{0}")]
+    Forbidden(&'static str),
     #[error("{0}")]
     Conflict(&'static str),
     #[error("erreur interne")]
@@ -30,7 +31,7 @@ impl IntoResponse for AppError {
             AppError::Validation(_) => (StatusCode::BAD_REQUEST, "bad_request"),
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
             AppError::InvalidToken => (StatusCode::UNAUTHORIZED, "unauthorized"),
-            AppError::Forbidden => (StatusCode::FORBIDDEN, "forbidden"),
+            AppError::Forbidden(_) => (StatusCode::FORBIDDEN, "forbidden"),
             AppError::Conflict(_) => (StatusCode::CONFLICT, "conflict"),
             AppError::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
         };

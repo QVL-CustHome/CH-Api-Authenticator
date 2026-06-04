@@ -63,7 +63,7 @@ pub async fn validate(
             .roles
             .get(portal)
             .cloned()
-            .ok_or(AppError::Forbidden)?
+            .ok_or(AppError::Forbidden("aucun rôle sur ce portail"))?
     };
 
     Ok(Json(ValidateResponse {
