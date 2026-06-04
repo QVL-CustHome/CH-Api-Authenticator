@@ -10,16 +10,18 @@ use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
 use ch_api_authenticator::config::{
-    Config, RegistrationConfig, Secrets, ServerConfig, Settings, TokenConfig,
+    Config, EmailConfig, RegistrationConfig, Secrets, ServerConfig, Settings, TokenConfig,
 };
 use ch_api_authenticator::domain::user::User;
 use ch_api_authenticator::routes::router;
+use ch_api_authenticator::services::mailer::{Mailer, SentEmail};
 use ch_api_authenticator::services::password;
 use ch_api_authenticator::state::AppState;
 use http_body_util::BodyExt;
 use mongodb::Database;
 use mongodb::bson::oid::ObjectId;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use tower::ServiceExt;
 
 pub const JWT_SECRET: &str = "un-secret-de-test-suffisamment-long!!!!!";
@@ -53,6 +55,23 @@ pub fn state_for_db(
     cookie_secure: bool,
     default_roles: HashMap<String, String>,
 ) -> AppState {
+    state_with_mailer(db, cookie_secure, default_roles, Mailer::Dev)
+}
+
+/// État avec un mailer Memory : rend la boîte d'envoi pour les assertions (US-16+).
+pub async fn test_state_with_outbox(db: &Database) -> (AppState, Arc<Mutex<Vec<SentEmail>>>) {
+    let (mailer, outbox) = Mailer::memory();
+    let state = state_with_mailer(db, false, HashMap::new(), mailer);
+    state.users.ensure_indexes().await.unwrap();
+    (state, outbox)
+}
+
+pub fn state_with_mailer(
+    db: &Database,
+    cookie_secure: bool,
+    default_roles: HashMap<String, String>,
+    mailer: Mailer,
+) -> AppState {
     AppState::new(
         Settings {
             config: Config {
@@ -66,15 +85,21 @@ pub fn state_for_db(
                     cookie_secure,
                 },
                 registration: RegistrationConfig { default_roles },
+                email: EmailConfig::default(),
             },
             secrets: Secrets {
                 jwt_secret: JWT_SECRET.to_string(),
                 mongo_uri: "mongodb://localhost:27017/test".to_string(),
                 admin_email: None,
                 admin_password: None,
+                smtp_host: None,
+                smtp_port: None,
+                smtp_user: None,
+                smtp_password: None,
             },
         },
         db.clone(),
+        mailer,
     )
 }
 

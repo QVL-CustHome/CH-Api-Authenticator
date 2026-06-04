@@ -23,6 +23,8 @@ pub enum ConfigError {
     MissingSecret(&'static str),
     #[error("JWT_SECRET trop court : {0} octets (minimum {MIN_JWT_SECRET_BYTES})")]
     WeakJwtSecret(usize),
+    #[error("valeur invalide pour {0} : {1}")]
+    InvalidValue(&'static str, String),
 }
 
 impl From<figment::Error> for ConfigError {
@@ -37,6 +39,8 @@ pub struct Config {
     pub token: TokenConfig,
     #[serde(default)]
     pub registration: RegistrationConfig,
+    #[serde(default)]
+    pub email: EmailConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -65,6 +69,25 @@ pub struct RegistrationConfig {
     pub default_roles: HashMap<String, String>,
 }
 
+/// Envoi des emails (US-16). En mode `dev`, les emails sont loggés au lieu
+/// d'être envoyés — aucun serveur SMTP requis pour développer.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct EmailConfig {
+    #[serde(default)]
+    pub mode: EmailMode,
+    /// Expéditeur, ex : `CustHome <no-reply@custhome.local>`.
+    #[serde(default = "default_email_from")]
+    pub from: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EmailMode {
+    #[default]
+    Dev,
+    Smtp,
+}
+
 /// Secrets chargés exclusivement depuis l'environnement.
 #[derive(Clone)]
 pub struct Secrets {
@@ -72,6 +95,11 @@ pub struct Secrets {
     pub mongo_uri: String,
     pub admin_email: Option<String>,
     pub admin_password: Option<String>,
+    /// SMTP (US-16) — requis uniquement si `email.mode = "smtp"`.
+    pub smtp_host: Option<String>,
+    pub smtp_port: Option<u16>,
+    pub smtp_user: Option<String>,
+    pub smtp_password: Option<String>,
 }
 
 // Debug manuel : les valeurs ne doivent jamais fuiter dans les logs.
@@ -85,7 +113,13 @@ impl std::fmt::Debug for Secrets {
                 "admin_password",
                 &self.admin_password.as_deref().map(|_| "***"),
             )
-            .finish()
+            .field("smtp_host", &self.smtp_host.as_deref().map(|_| "***"))
+            .field("smtp_user", &self.smtp_user.as_deref().map(|_| "***"))
+            .field(
+                "smtp_password",
+                &self.smtp_password.as_deref().map(|_| "***"),
+            )
+            .finish_non_exhaustive()
     }
 }
 
@@ -101,6 +135,7 @@ pub fn load(path: &str) -> Result<Settings, ConfigError> {
         .extract()?;
     let secrets = load_secrets()?;
     validate_secrets(&secrets)?;
+    validate_email(&config.email, &secrets)?;
     Ok(Settings { config, secrets })
 }
 
@@ -110,7 +145,29 @@ fn load_secrets() -> Result<Secrets, ConfigError> {
         mongo_uri: require("MONGO_URI")?,
         admin_email: optional("ADMIN_EMAIL"),
         admin_password: optional("ADMIN_PASSWORD"),
+        smtp_host: optional("SMTP_HOST"),
+        smtp_port: parse_optional_port("SMTP_PORT")?,
+        smtp_user: optional("SMTP_USER"),
+        smtp_password: optional("SMTP_PASSWORD"),
     })
+}
+
+fn parse_optional_port(name: &'static str) -> Result<Option<u16>, ConfigError> {
+    match optional(name) {
+        None => Ok(None),
+        Some(raw) => raw
+            .parse::<u16>()
+            .map(Some)
+            .map_err(|_| ConfigError::InvalidValue(name, raw)),
+    }
+}
+
+/// US-16 : le mode smtp exige au minimum un hôte — échec explicite au démarrage.
+fn validate_email(email: &EmailConfig, secrets: &Secrets) -> Result<(), ConfigError> {
+    if email.mode == EmailMode::Smtp && secrets.smtp_host.is_none() {
+        return Err(ConfigError::MissingSecret("SMTP_HOST"));
+    }
+    Ok(())
 }
 
 fn require(name: &'static str) -> Result<String, ConfigError> {
@@ -133,6 +190,10 @@ fn default_log_level() -> String {
     "INFO".to_string()
 }
 
+fn default_email_from() -> String {
+    "CustHome <no-reply@custhome.local>".to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -143,7 +204,31 @@ mod tests {
             mongo_uri: "mongodb://localhost:27017/test".to_string(),
             admin_email: None,
             admin_password: None,
+            smtp_host: None,
+            smtp_port: None,
+            smtp_user: None,
+            smtp_password: None,
         }
+    }
+
+    #[test]
+    fn mode_smtp_sans_host_rejete_au_demarrage() {
+        let email = EmailConfig {
+            mode: EmailMode::Smtp,
+            from: default_email_from(),
+        };
+        let err = validate_email(&email, &secrets("un-secret-suffisamment-long-pour-hs256!!"))
+            .unwrap_err();
+        assert!(matches!(err, ConfigError::MissingSecret("SMTP_HOST")));
+    }
+
+    #[test]
+    fn mode_dev_sans_secrets_smtp_accepte() {
+        let ok = validate_email(
+            &EmailConfig::default(),
+            &secrets("un-secret-suffisamment-long-pour-hs256!!"),
+        );
+        assert!(ok.is_ok());
     }
 
     #[test]
