@@ -9,6 +9,9 @@ use serde_json::json;
 pub enum AppError {
     #[error("requête invalide : {0}")]
     Validation(String),
+    /// Toujours le même message, quelle que soit la cause (anti-énumération, US-03).
+    #[error("identifiants invalides")]
+    Unauthorized,
     #[error("{0}")]
     Conflict(&'static str),
     #[error("erreur interne")]
@@ -19,6 +22,7 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, error) = match &self {
             AppError::Validation(_) => (StatusCode::BAD_REQUEST, "bad_request"),
+            AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
             AppError::Conflict(_) => (StatusCode::CONFLICT, "conflict"),
             AppError::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
         };

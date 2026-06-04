@@ -6,10 +6,6 @@
 //! - variables d'environnement dédiées aux secrets : `JWT_SECRET`,
 //!   `MONGO_URI`, et le seed super-admin `ADMIN_EMAIL` / `ADMIN_PASSWORD` (US-01).
 
-// Champs consommés progressivement par les US suivantes (mongo_uri en US-01,
-// token.* en US-03, default_roles en US-02) — allow retiré à la fin du sprint.
-#![allow(dead_code)]
-
 use figment::Figment;
 use figment::providers::{Env, Format, Toml};
 use serde::Deserialize;
