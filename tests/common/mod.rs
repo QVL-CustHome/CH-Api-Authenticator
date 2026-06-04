@@ -105,6 +105,7 @@ pub fn roles(entries: &[(&str, &str)]) -> HashMap<String, String> {
 pub struct TestResponse {
     pub status: StatusCode,
     pub set_cookie: Option<String>,
+    pub correlation_id: Option<String>,
     pub body: serde_json::Value,
 }
 
@@ -138,11 +139,16 @@ async fn send(app: Router, request: Request<Body>) -> TestResponse {
         .headers()
         .get(header::SET_COOKIE)
         .map(|v| v.to_str().unwrap().to_string());
+    let correlation_id = response
+        .headers()
+        .get(ch_api_authenticator::middleware::tracing::CORRELATION_HEADER)
+        .map(|v| v.to_str().unwrap().to_string());
     let bytes = response.into_body().collect().await.unwrap().to_bytes();
     let body = serde_json::from_slice(&bytes).unwrap_or(serde_json::Value::Null);
     TestResponse {
         status,
         set_cookie,
+        correlation_id,
         body,
     }
 }

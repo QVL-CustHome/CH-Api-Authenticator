@@ -22,6 +22,8 @@ ipnet = "2"
 tower-http = { version = "0.6", features = ["trace"] }
 dotenvy = "0.15"
 thiserror = "2"
+# Génération du X-Correlation-ID quand il est absent (même crate que la Gateway Go : uuid).
+uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
