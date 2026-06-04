@@ -10,6 +10,7 @@ use axum::routing::{get, post};
 
 pub fn router(state: AppState) -> Router {
     Router::new()
+        .route("/health", get(handlers::health::health))
         .route("/ping", get(handlers::ping::ping))
         .route("/register", post(handlers::register::register))
         .route("/login", post(handlers::login::login))

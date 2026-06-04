@@ -1,5 +1,6 @@
-//! Handlers HTTP. À venir : health (US-07).
+//! Handlers HTTP.
 
+pub mod health;
 pub mod login;
 pub mod ping;
 pub mod register;

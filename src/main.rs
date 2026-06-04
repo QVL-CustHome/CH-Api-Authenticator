@@ -32,24 +32,23 @@ async fn main() {
         }
     };
 
-    let users = UserRepository::new(&db);
+    let state = AppState::new(settings, db);
 
     // US-01 : index unique sur email, idempotent.
-    if let Err(e) = users.ensure_indexes().await {
+    if let Err(e) = state.users.ensure_indexes().await {
         tracing::error!(error = %e, "Création des index impossible");
         eprintln!("Démarrage impossible — création des index MongoDB en échec : {e}");
         std::process::exit(1);
     }
 
     // US-01 : seed du premier super-admin (créé uniquement s'il n'existe pas).
-    if let Err(e) = seed_super_admin(&users, &settings.secrets).await {
+    if let Err(e) = seed_super_admin(&state.users, &state.settings.secrets).await {
         tracing::error!(error = %e, "Seed du super-admin en échec");
         eprintln!("Démarrage impossible — seed du super-admin en échec : {e}");
         std::process::exit(1);
     }
 
-    let port = settings.config.server.port;
-    let state = AppState::new(settings, users);
+    let port = state.settings.config.server.port;
     let app = routes::router(state);
 
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
