@@ -1,15 +1,19 @@
 //! Connexion : vérification des identifiants et émission du JWT (US-03).
 
 use crate::error::AppError;
-use crate::services::password;
+use crate::services::{password, whitelist};
 use crate::state::AppState;
 use axum::Json;
 use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
-use axum::http::header;
+use axum::http::{HeaderMap, header};
 use axum::response::IntoResponse;
 use serde::{Deserialize, Serialize};
+use std::net::IpAddr;
 use std::sync::LazyLock;
+
+/// IP client réelle, transmise par la Gateway (logique trusted_proxies, US-10 côté Gateway).
+pub const CLIENT_IP_HEADER: &str = "x-client-ip";
 
 // Pas de derive Debug : le mot de passe ne doit jamais fuiter dans les logs.
 #[derive(Deserialize)]
@@ -36,6 +40,7 @@ static DUMMY_HASH: LazyLock<String> =
 /// EXACTEMENT la même réponse `401` (US-03), et la whitelist KO aussi (US-04).
 pub async fn login(
     State(state): State<AppState>,
+    headers: HeaderMap,
     payload: Result<Json<LoginRequest>, JsonRejection>,
 ) -> Result<impl IntoResponse, AppError> {
     let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
@@ -59,7 +64,22 @@ pub async fn login(
         return Err(AppError::Unauthorized);
     }
 
-    let access_token = state.jwt.issue(&user, None).map_err(|e| {
+    // US-04 : compte restreint par whitelist — IP requise et autorisée, sinon 401
+    // générique (indistinguable d'un mauvais mot de passe). L'IP de login est
+    // alors liée au token (claim `ip`) et revérifiée au /validate (US-05).
+    let token_ip = if user.whitelist_only {
+        let Some(client_ip) = client_ip(&headers) else {
+            return Err(AppError::Unauthorized);
+        };
+        if !whitelist::ip_allowed(client_ip, &user.allowed_ips) {
+            return Err(AppError::Unauthorized);
+        }
+        Some(client_ip.to_string())
+    } else {
+        None
+    };
+
+    let access_token = state.jwt.issue(&user, token_ip).map_err(|e| {
         tracing::error!(error = %e, "Émission du token en échec");
         AppError::Internal
     })?;
@@ -72,6 +92,17 @@ pub async fn login(
     };
 
     Ok(([(header::SET_COOKIE, cookie)], Json(body)))
+}
+
+/// IP client depuis le header `X-Client-IP` (illisible ou absent → `None`).
+fn client_ip(headers: &HeaderMap) -> Option<IpAddr> {
+    headers
+        .get(CLIENT_IP_HEADER)?
+        .to_str()
+        .ok()?
+        .trim()
+        .parse()
+        .ok()
 }
 
 /// Cookie HttpOnly lu par la Gateway (US-11 côté Gateway).
@@ -152,17 +183,35 @@ mod tests {
         state.users.insert(&user).await.unwrap();
     }
 
+    async fn seed_whitelist_user(state: &AppState, allowed_ips: &[&str]) {
+        let mut user = User::new(
+            "secure@test.fr",
+            password::hash("bon-mot-de-passe").unwrap(),
+            HashMap::new(),
+        );
+        user.whitelist_only = true;
+        user.allowed_ips = allowed_ips.iter().map(|s| s.to_string()).collect();
+        state.users.insert(&user).await.unwrap();
+    }
+
     async fn post_login(
         state: AppState,
         body: &str,
     ) -> (StatusCode, Option<String>, serde_json::Value) {
+        post_login_from_ip(state, body, None).await
+    }
+
+    async fn post_login_from_ip(
+        state: AppState,
+        body: &str,
+        client_ip: Option<&str>,
+    ) -> (StatusCode, Option<String>, serde_json::Value) {
+        let mut request = Request::post("/login").header(header::CONTENT_TYPE, "application/json");
+        if let Some(ip) = client_ip {
+            request = request.header(super::CLIENT_IP_HEADER, ip);
+        }
         let response = router(state)
-            .oneshot(
-                Request::post("/login")
-                    .header(header::CONTENT_TYPE, "application/json")
-                    .body(Body::from(body.to_string()))
-                    .unwrap(),
-            )
+            .oneshot(request.body(Body::from(body.to_string())).unwrap())
             .await
             .unwrap();
         let status = response.status();
@@ -253,6 +302,99 @@ mod tests {
         assert_eq!(body_inconnu, body_mdp);
         assert_eq!(cookie_inconnu, None);
         assert_eq!(cookie_mdp, None);
+
+        db.drop().await.unwrap();
+    }
+
+    const WHITELIST_BODY: &str = r#"{"email": "secure@test.fr", "password": "bon-mot-de-passe"}"#;
+
+    #[tokio::test]
+    async fn whitelist_ip_exacte_200_avec_claim_ip() {
+        let db = test_db().await;
+        let state = test_state(&db, false).await;
+        seed_whitelist_user(&state, &["10.1.2.3", "192.168.0.0/16"]).await;
+
+        let (status, _, body) =
+            post_login_from_ip(state.clone(), WHITELIST_BODY, Some("10.1.2.3")).await;
+
+        assert_eq!(status, StatusCode::OK);
+        let claims = state
+            .jwt
+            .validate(body["access_token"].as_str().unwrap())
+            .unwrap();
+        assert_eq!(claims.ip.as_deref(), Some("10.1.2.3"));
+
+        db.drop().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn whitelist_ip_dans_cidr_200() {
+        let db = test_db().await;
+        let state = test_state(&db, false).await;
+        seed_whitelist_user(&state, &["10.1.2.3", "192.168.0.0/16"]).await;
+
+        let (status, _, body) =
+            post_login_from_ip(state.clone(), WHITELIST_BODY, Some("192.168.42.7")).await;
+
+        assert_eq!(status, StatusCode::OK);
+        let claims = state
+            .jwt
+            .validate(body["access_token"].as_str().unwrap())
+            .unwrap();
+        assert_eq!(claims.ip.as_deref(), Some("192.168.42.7"));
+
+        db.drop().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn whitelist_ip_hors_liste_ou_absente_401_generique() {
+        let db = test_db().await;
+        let state = test_state(&db, false).await;
+        seed_whitelist_user(&state, &["10.1.2.3"]).await;
+
+        // IP hors liste et header absent → même 401 qu'un mauvais mot de passe.
+        let (status_hors, _, body_hors) =
+            post_login_from_ip(state.clone(), WHITELIST_BODY, Some("8.8.8.8")).await;
+        let (status_sans, _, body_sans) =
+            post_login_from_ip(state.clone(), WHITELIST_BODY, None).await;
+        let (status_mdp, _, body_mdp) = post_login_from_ip(
+            state,
+            r#"{"email": "secure@test.fr", "password": "mauvais"}"#,
+            Some("10.1.2.3"),
+        )
+        .await;
+
+        assert_eq!(status_hors, StatusCode::UNAUTHORIZED);
+        assert_eq!(status_sans, StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            body_hors, body_mdp,
+            "whitelist KO indistinguable d'un mauvais mdp"
+        );
+        assert_eq!(body_sans, body_mdp);
+        assert_eq!(status_mdp, StatusCode::UNAUTHORIZED);
+
+        db.drop().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn user_sans_whitelist_non_impacte() {
+        let db = test_db().await;
+        let state = test_state(&db, false).await;
+        seed_user(&state).await;
+
+        // Sans header X-Client-IP : login OK et aucun claim ip.
+        let (status, _, body) = post_login(
+            state.clone(),
+            r#"{"email": "martin@test.fr", "password": "bon-mot-de-passe"}"#,
+        )
+        .await;
+
+        assert_eq!(status, StatusCode::OK);
+        let claims = state
+            .jwt
+            .validate(body["access_token"].as_str().unwrap())
+            .unwrap();
+        assert_eq!(claims.ip, None);
 
         db.drop().await.unwrap();
     }
