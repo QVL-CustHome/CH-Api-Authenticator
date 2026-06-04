@@ -1,7 +1,8 @@
-//! Réinitialisation de mot de passe par email — demande (US-17) et
-//! consommation du token (US-18).
+//! Gestion du mot de passe : changement authentifié (US-15),
+//! réinitialisation par email — demande (US-17) et consommation (US-18).
 
 use crate::error::AppError;
+use crate::middleware::auth::AuthUser;
 use crate::services::{password, reset_token};
 use crate::state::AppState;
 use axum::Json;
@@ -9,6 +10,7 @@ use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
+use mongodb::bson::oid::ObjectId;
 use serde::Deserialize;
 use serde_json::json;
 use std::time::Duration;
@@ -26,6 +28,65 @@ pub struct ForgotRequest {
 pub struct ResetRequest {
     pub token: String,
     pub new_password: String,
+}
+
+// Pas de derive Debug : les mots de passe ne doivent jamais fuiter dans les logs.
+#[derive(Deserialize)]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
+}
+
+/// `PUT /password` (authentifié, US-15) → change le mot de passe en prouvant
+/// que l'ancien est connu. `401` générique si l'ancien est faux.
+pub async fn change(
+    State(state): State<AppState>,
+    AuthUser(claims): AuthUser,
+    payload: Result<Json<ChangePasswordRequest>, JsonRejection>,
+) -> Result<impl IntoResponse, AppError> {
+    let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
+
+    if request.new_password.chars().count() < MIN_PASSWORD_CHARS {
+        return Err(AppError::Validation(
+            "mot de passe trop court (minimum 8 caractères)".to_string(),
+        ));
+    }
+
+    let user_id = ObjectId::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
+    let user = state
+        .users
+        .find_by_id(user_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "Lecture utilisateur en échec");
+            AppError::Internal
+        })?
+        .ok_or(AppError::InvalidToken)?;
+
+    if !password::verify(&request.current_password, &user.password_hash) {
+        return Err(AppError::Unauthorized);
+    }
+
+    let password_hash = password::hash(&request.new_password).map_err(|_| AppError::Internal)?;
+    if !state
+        .users
+        .update_password(user_id, &password_hash)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "Mise à jour du mot de passe en échec");
+            AppError::Internal
+        })?
+    {
+        return Err(AppError::InvalidToken);
+    }
+
+    // US-19 : révoquera ici tous les refresh tokens de l'utilisateur.
+
+    tracing::info!(user_id = %user_id, "Mot de passe changé");
+    Ok((
+        StatusCode::OK,
+        Json(json!({ "message": "Mot de passe changé." })),
+    ))
 }
 
 /// `POST /password/forgot` → TOUJOURS `202` (anti-énumération) : la réponse
