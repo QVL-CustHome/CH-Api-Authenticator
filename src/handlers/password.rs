@@ -3,7 +3,7 @@
 
 use crate::error::AppError;
 use crate::middleware::auth::AuthUser;
-use crate::services::{password, reset_token};
+use crate::services::{password, secure_token};
 use crate::state::AppState;
 use axum::Json;
 use axum::extract::State;
@@ -80,7 +80,10 @@ pub async fn change(
         return Err(AppError::InvalidToken);
     }
 
-    // US-19 : révoquera ici tous les refresh tokens de l'utilisateur.
+    // US-19 : toutes les sessions longues tombent avec l'ancien mot de passe.
+    if let Err(e) = state.refresh_tokens.revoke_all_for_user(user_id).await {
+        tracing::error!(error = %e, "Révocation des refresh tokens en échec");
+    }
 
     tracing::info!(user_id = %user_id, "Mot de passe changé");
     Ok((
@@ -108,12 +111,12 @@ pub async fn forgot(
         })?
     {
         let user_id = user.id.expect("utilisateur persisté : id renseigné");
-        let token = reset_token::generate();
+        let token = secure_token::generate();
         let ttl = Duration::from_secs(state.settings.config.password_reset.ttl_minutes * 60);
 
         state
             .reset_tokens
-            .replace_for_user(user_id, &reset_token::hash(&token), ttl)
+            .replace_for_user(user_id, &secure_token::hash(&token), ttl)
             .await
             .map_err(|e| {
                 tracing::error!(error = %e, "Enregistrement du token de reset en échec");
@@ -168,7 +171,7 @@ pub async fn reset(
 
     let consumed = state
         .reset_tokens
-        .consume(&reset_token::hash(&request.token))
+        .consume(&secure_token::hash(&request.token))
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Consommation du token de reset en échec");
@@ -191,7 +194,14 @@ pub async fn reset(
         return Err(AppError::Validation("token invalide ou expiré".to_string()));
     }
 
-    // US-19 : révoquera ici tous les refresh tokens de l'utilisateur.
+    // US-19 : toutes les sessions longues tombent avec l'ancien mot de passe.
+    if let Err(e) = state
+        .refresh_tokens
+        .revoke_all_for_user(consumed.user_id)
+        .await
+    {
+        tracing::error!(error = %e, "Révocation des refresh tokens en échec");
+    }
 
     tracing::info!(user_id = %consumed.user_id, "Mot de passe réinitialisé");
     Ok((

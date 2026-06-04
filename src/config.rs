@@ -89,6 +89,20 @@ pub struct TokenConfig {
     /// Attribut Secure du cookie — `false` uniquement en dev local.
     #[serde(default)]
     pub cookie_secure: bool,
+    /// Durée de vie des refresh tokens, en jours (US-19).
+    #[serde(default = "default_refresh_ttl_days")]
+    pub refresh_ttl_days: u64,
+    /// Cookie HttpOnly du refresh token (US-19).
+    #[serde(default = "default_refresh_cookie_name")]
+    pub refresh_cookie_name: String,
+}
+
+fn default_refresh_ttl_days() -> u64 {
+    7
+}
+
+fn default_refresh_cookie_name() -> String {
+    "ch_refresh".to_string()
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

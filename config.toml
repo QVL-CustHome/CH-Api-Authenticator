@@ -15,6 +15,9 @@ ttl_minutes = 15
 cookie_name = "ch_token"
 # false uniquement en dev local (pas de HTTPS) — true en production.
 cookie_secure = false
+# Refresh tokens (US-19) : durée de vie (jours) et cookie HttpOnly dédié.
+refresh_ttl_days = 7
+refresh_cookie_name = "ch_refresh"
 
 [registration]
 # Rôles attribués automatiquement à l'inscription : { portail = "rôle" }.
