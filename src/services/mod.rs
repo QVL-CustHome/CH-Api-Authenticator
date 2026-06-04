@@ -1,4 +1,4 @@
-//! Logique applicative. À venir : émission/validation JWT (US-03, US-05),
-//! whitelist IP/CIDR (US-04).
+//! Logique applicative. À venir : whitelist IP/CIDR (US-04).
 
+pub mod jwt;
 pub mod password;

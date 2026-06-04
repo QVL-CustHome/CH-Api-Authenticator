@@ -9,6 +9,7 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/ping", get(handlers::ping::ping))
         .route("/register", post(handlers::register::register))
+        .route("/login", post(handlers::login::login))
         .with_state(state)
 }
 
