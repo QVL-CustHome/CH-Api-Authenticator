@@ -1,7 +1,8 @@
-//! Réinitialisation de mot de passe par email — demande (US-17).
+//! Réinitialisation de mot de passe par email — demande (US-17) et
+//! consommation du token (US-18).
 
 use crate::error::AppError;
-use crate::services::reset_token;
+use crate::services::{password, reset_token};
 use crate::state::AppState;
 use axum::Json;
 use axum::extract::State;
@@ -12,9 +13,19 @@ use serde::Deserialize;
 use serde_json::json;
 use std::time::Duration;
 
+/// Taille minimale du mot de passe (cohérent avec /register).
+const MIN_PASSWORD_CHARS: usize = 8;
+
 #[derive(Deserialize)]
 pub struct ForgotRequest {
     pub email: String,
+}
+
+// Pas de derive Debug : le mot de passe ne doit jamais fuiter dans les logs.
+#[derive(Deserialize)]
+pub struct ResetRequest {
+    pub token: String,
+    pub new_password: String,
 }
 
 /// `POST /password/forgot` → TOUJOURS `202` (anti-énumération) : la réponse
@@ -74,5 +85,56 @@ pub async fn forgot(
         Json(json!({
             "message": "Si un compte existe pour cet email, un lien de réinitialisation a été envoyé."
         })),
+    ))
+}
+
+/// `POST /password/reset` → consomme le token one-time et pose le nouveau
+/// mot de passe. `400` strictement générique pour un token inconnu, expiré
+/// ou déjà utilisé — sans distinguer la cause (US-18).
+pub async fn reset(
+    State(state): State<AppState>,
+    payload: Result<Json<ResetRequest>, JsonRejection>,
+) -> Result<impl IntoResponse, AppError> {
+    let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
+
+    // Validé AVANT de consommer : un mot de passe trop court ne doit pas
+    // brûler le token (l'utilisateur peut réessayer avec le même lien).
+    if request.new_password.chars().count() < MIN_PASSWORD_CHARS {
+        return Err(AppError::Validation(
+            "mot de passe trop court (minimum 8 caractères)".to_string(),
+        ));
+    }
+
+    let consumed = state
+        .reset_tokens
+        .consume(&reset_token::hash(&request.token))
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "Consommation du token de reset en échec");
+            AppError::Internal
+        })?
+        .ok_or_else(|| AppError::Validation("token invalide ou expiré".to_string()))?;
+
+    let password_hash = password::hash(&request.new_password).map_err(|_| AppError::Internal)?;
+    let updated = state
+        .users
+        .update_password(consumed.user_id, &password_hash)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "Mise à jour du mot de passe en échec");
+            AppError::Internal
+        })?;
+
+    if !updated {
+        // Compte supprimé entre-temps : même réponse générique que token invalide.
+        return Err(AppError::Validation("token invalide ou expiré".to_string()));
+    }
+
+    // US-19 : révoquera ici tous les refresh tokens de l'utilisateur.
+
+    tracing::info!(user_id = %consumed.user_id, "Mot de passe réinitialisé");
+    Ok((
+        StatusCode::OK,
+        Json(json!({ "message": "Mot de passe réinitialisé." })),
     ))
 }

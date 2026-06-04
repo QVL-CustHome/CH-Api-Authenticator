@@ -60,6 +60,23 @@ impl UserRepository {
         self.collection.find_one(doc! { "_id": id }).await
     }
 
+    /// Remplace le hash du mot de passe (US-18). `Ok(false)` si l'id est inconnu.
+    pub async fn update_password(
+        &self,
+        id: ObjectId,
+        password_hash: &str,
+    ) -> Result<bool, mongodb::error::Error> {
+        let update = doc! { "$set": {
+            "password_hash": password_hash,
+            "updated_at": mongodb::bson::DateTime::now(),
+        } };
+        let result = self
+            .collection
+            .update_one(doc! { "_id": id }, update)
+            .await?;
+        Ok(result.matched_count == 1)
+    }
+
     /// Change l'email (déjà normalisé par l'appelant). `Ok(false)` si l'id
     /// est inconnu ; l'unicité reste garantie par l'index (US-14).
     pub async fn update_email(&self, id: ObjectId, email: &str) -> Result<bool, RepositoryError> {
