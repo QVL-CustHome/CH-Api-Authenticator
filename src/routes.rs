@@ -15,12 +15,25 @@ pub fn router(state: AppState) -> Router {
 mod tests {
     use super::*;
     use crate::config::{Config, RegistrationConfig, Secrets, ServerConfig, Settings, TokenConfig};
+    use crate::repository::users::UserRepository;
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use tower::ServiceExt;
 
+    /// Repository sur client lazy : aucune connexion tant qu'aucune requête DB n'est émise.
+    fn test_repository() -> UserRepository {
+        let options = mongodb::options::ClientOptions::builder()
+            .hosts(vec![mongodb::options::ServerAddress::Tcp {
+                host: "localhost".to_string(),
+                port: Some(27017),
+            }])
+            .build();
+        let client = mongodb::Client::with_options(options).unwrap();
+        UserRepository::new(&client.database("ch_auth_test_routes"))
+    }
+
     fn test_state() -> AppState {
-        AppState::new(Settings {
+        let settings = Settings {
             config: Config {
                 server: ServerConfig {
                     port: 0,
@@ -39,7 +52,8 @@ mod tests {
                 admin_email: None,
                 admin_password: None,
             },
-        })
+        };
+        AppState::new(settings, test_repository())
     }
 
     #[tokio::test]

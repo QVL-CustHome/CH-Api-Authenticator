@@ -1,1 +1,3 @@
-//! Modèles métier : utilisateur avec rôles par portail (US-01), claims JWT (US-03).
+//! Modèles métier. À venir : claims JWT (US-03).
+
+pub mod user;
