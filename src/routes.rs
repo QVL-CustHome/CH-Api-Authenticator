@@ -3,11 +3,12 @@
 use crate::handlers;
 use crate::state::AppState;
 use axum::Router;
-use axum::routing::get;
+use axum::routing::{get, post};
 
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/ping", get(handlers::ping::ping))
+        .route("/register", post(handlers::register::register))
         .with_state(state)
 }
 
