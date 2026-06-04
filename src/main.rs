@@ -104,10 +104,14 @@ async fn seed_super_admin(users: &UserRepository, secrets: &Secrets) -> Result<(
     }
 }
 
-/// Initialise les logs. Le format JSON structuré complet (avec correlation ID)
-/// sera mis en place en US-06 ; sortie lisible en attendant.
+/// Initialise les logs JSON structurés (US-06), niveau configurable
+/// (DEBUG/INFO/WARN/ERROR — cohérent avec la Gateway). Le correlation id
+/// est porté par le span `requete` (voir `middleware::tracing`).
 fn init_tracing(level: &str) {
     let filter = tracing_subscriber::EnvFilter::try_new(level.to_lowercase())
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
-    tracing_subscriber::fmt().with_env_filter(filter).init();
+    tracing_subscriber::fmt()
+        .json()
+        .with_env_filter(filter)
+        .init();
 }
