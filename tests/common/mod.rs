@@ -178,10 +178,14 @@ async fn send(app: Router, request: Request<Body>) -> TestResponse {
 
 /// Login via l'API et rend l'access token (chemin nominal).
 pub async fn login_token(state: &AppState, email: &str) -> String {
+    login_token_with(state, email, PASSWORD).await
+}
+
+pub async fn login_token_with(state: &AppState, email: &str, password: &str) -> String {
     let response = post_json(
         router(state.clone()),
         "/login",
-        &format!(r#"{{"email": "{email}", "password": "{PASSWORD}"}}"#),
+        &format!(r#"{{"email": "{email}", "password": "{password}"}}"#),
         &[],
     )
     .await;
