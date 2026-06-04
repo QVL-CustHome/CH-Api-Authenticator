@@ -21,6 +21,9 @@ pub enum AppError {
     Forbidden(&'static str),
     #[error("{0}")]
     Conflict(&'static str),
+    /// Ressource inexistante (US-20).
+    #[error("{0}")]
+    NotFound(&'static str),
     #[error("erreur interne")]
     Internal,
 }
@@ -33,6 +36,7 @@ impl IntoResponse for AppError {
             AppError::InvalidToken => (StatusCode::UNAUTHORIZED, "unauthorized"),
             AppError::Forbidden(_) => (StatusCode::FORBIDDEN, "forbidden"),
             AppError::Conflict(_) => (StatusCode::CONFLICT, "conflict"),
+            AppError::NotFound(_) => (StatusCode::NOT_FOUND, "not_found"),
             AppError::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
         };
         let body = json!({ "error": error, "message": self.to_string() });
