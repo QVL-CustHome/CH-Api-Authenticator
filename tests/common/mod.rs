@@ -13,7 +13,6 @@ use ch_api_authenticator::config::{
     Config, RegistrationConfig, Secrets, ServerConfig, Settings, TokenConfig,
 };
 use ch_api_authenticator::domain::user::User;
-use ch_api_authenticator::repository::users::UserRepository;
 use ch_api_authenticator::routes::router;
 use ch_api_authenticator::services::password;
 use ch_api_authenticator::state::AppState;
@@ -43,8 +42,17 @@ pub async fn test_state_with(
     cookie_secure: bool,
     default_roles: HashMap<String, String>,
 ) -> AppState {
-    let users = UserRepository::new(db);
-    users.ensure_indexes().await.unwrap();
+    let state = state_for_db(db, cookie_secure, default_roles);
+    state.users.ensure_indexes().await.unwrap();
+    state
+}
+
+/// État sans création d'index — utilisable avec une base injoignable (US-07).
+pub fn state_for_db(
+    db: &Database,
+    cookie_secure: bool,
+    default_roles: HashMap<String, String>,
+) -> AppState {
     AppState::new(
         Settings {
             config: Config {
@@ -66,8 +74,23 @@ pub async fn test_state_with(
                 admin_password: None,
             },
         },
-        users,
+        db.clone(),
     )
+}
+
+/// Base volontairement injoignable (port fermé, timeout court) pour
+/// éprouver le mode dégradé (US-07).
+pub fn broken_db() -> Database {
+    let options = mongodb::options::ClientOptions::builder()
+        .hosts(vec![mongodb::options::ServerAddress::Tcp {
+            host: "localhost".to_string(),
+            port: Some(1),
+        }])
+        .server_selection_timeout(std::time::Duration::from_millis(200))
+        .build();
+    mongodb::Client::with_options(options)
+        .unwrap()
+        .database("down")
 }
 
 /// Insère un utilisateur avec le mot de passe [`PASSWORD`] et rend l'utilisateur persisté.
