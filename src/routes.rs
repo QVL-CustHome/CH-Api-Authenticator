@@ -15,6 +15,11 @@ pub fn router(state: AppState) -> Router {
         .route("/register", post(handlers::register::register))
         .route("/login", post(handlers::login::login))
         .route("/validate", get(handlers::validate::validate))
+        // Endpoints protégés par l'auth interne (US-13).
+        .route(
+            "/me",
+            get(handlers::me::get_me).put(handlers::me::update_me),
+        )
         // US-06 : correlation id + log d'accès sur toutes les routes.
         .layer(from_fn(correlation_and_access_log))
         .with_state(state)

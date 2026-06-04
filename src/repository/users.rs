@@ -55,6 +55,24 @@ impl UserRepository {
             .find_one(doc! { "email": email.trim().to_lowercase() })
             .await
     }
+
+    pub async fn find_by_id(&self, id: ObjectId) -> Result<Option<User>, mongodb::error::Error> {
+        self.collection.find_one(doc! { "_id": id }).await
+    }
+
+    /// Change l'email (déjà normalisé par l'appelant). `Ok(false)` si l'id
+    /// est inconnu ; l'unicité reste garantie par l'index (US-14).
+    pub async fn update_email(&self, id: ObjectId, email: &str) -> Result<bool, RepositoryError> {
+        let update = doc! { "$set": {
+            "email": email,
+            "updated_at": mongodb::bson::DateTime::now(),
+        } };
+        match self.collection.update_one(doc! { "_id": id }, update).await {
+            Ok(result) => Ok(result.matched_count == 1),
+            Err(e) if is_duplicate_key(&e) => Err(RepositoryError::DuplicateEmail),
+            Err(e) => Err(RepositoryError::Database(e)),
+        }
+    }
 }
 
 fn is_duplicate_key(e: &mongodb::error::Error) -> bool {
