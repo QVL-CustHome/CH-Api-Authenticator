@@ -140,6 +140,7 @@ mod tests {
                     mode,
                     from: from.to_string(),
                 },
+                password_reset: crate::config::PasswordResetConfig::default(),
             },
             secrets: Secrets {
                 jwt_secret: "un-secret-de-test-suffisamment-long!!!!!".to_string(),

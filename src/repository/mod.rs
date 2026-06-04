@@ -1,5 +1,6 @@
-//! Accès MongoDB : connexion fail-fast et collection `users` (US-01).
+//! Accès MongoDB : connexion fail-fast et collections.
 
+pub mod reset_tokens;
 pub mod users;
 
 use mongodb::bson::doc;

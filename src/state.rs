@@ -1,6 +1,7 @@
 //! État partagé de l'application, injecté dans les handlers Axum.
 
 use crate::config::Settings;
+use crate::repository::reset_tokens::ResetTokenRepository;
 use crate::repository::users::UserRepository;
 use crate::services::jwt::JwtService;
 use crate::services::mailer::Mailer;
@@ -13,6 +14,8 @@ pub struct AppState {
     /// Handle base : ping du health check (US-07).
     pub db: Database,
     pub users: UserRepository,
+    /// Tokens one-time de réinitialisation de mot de passe (US-17/18).
+    pub reset_tokens: ResetTokenRepository,
     pub jwt: Arc<JwtService>,
     /// Envoi des emails (US-16) — construit en amont (fail-fast au démarrage).
     pub mailer: Arc<Mailer>,
@@ -27,6 +30,7 @@ impl AppState {
         Self {
             settings: Arc::new(settings),
             users: UserRepository::new(&db),
+            reset_tokens: ResetTokenRepository::new(&db),
             db,
             jwt,
             mailer: Arc::new(mailer),

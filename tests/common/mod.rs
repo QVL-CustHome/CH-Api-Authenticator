@@ -10,7 +10,8 @@ use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
 use ch_api_authenticator::config::{
-    Config, EmailConfig, RegistrationConfig, Secrets, ServerConfig, Settings, TokenConfig,
+    Config, EmailConfig, PasswordResetConfig, RegistrationConfig, Secrets, ServerConfig, Settings,
+    TokenConfig,
 };
 use ch_api_authenticator::domain::user::User;
 use ch_api_authenticator::routes::router;
@@ -46,6 +47,7 @@ pub async fn test_state_with(
 ) -> AppState {
     let state = state_for_db(db, cookie_secure, default_roles);
     state.users.ensure_indexes().await.unwrap();
+    state.reset_tokens.ensure_indexes().await.unwrap();
     state
 }
 
@@ -63,6 +65,7 @@ pub async fn test_state_with_outbox(db: &Database) -> (AppState, Arc<Mutex<Vec<S
     let (mailer, outbox) = Mailer::memory();
     let state = state_with_mailer(db, false, HashMap::new(), mailer);
     state.users.ensure_indexes().await.unwrap();
+    state.reset_tokens.ensure_indexes().await.unwrap();
     (state, outbox)
 }
 
@@ -86,6 +89,7 @@ pub fn state_with_mailer(
                 },
                 registration: RegistrationConfig { default_roles },
                 email: EmailConfig::default(),
+                password_reset: PasswordResetConfig::default(),
             },
             secrets: Secrets {
                 jwt_secret: JWT_SECRET.to_string(),

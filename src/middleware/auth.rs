@@ -113,6 +113,7 @@ mod tests {
                     },
                     registration: RegistrationConfig::default(),
                     email: EmailConfig::default(),
+                    password_reset: crate::config::PasswordResetConfig::default(),
                 },
                 secrets: Secrets {
                     jwt_secret: JWT_SECRET.to_string(),

@@ -44,8 +44,12 @@ async fn main() {
 
     let state = AppState::new(settings, db, mailer);
 
-    // US-01 : index unique sur email, idempotent.
-    if let Err(e) = state.users.ensure_indexes().await {
+    // US-01/US-17 : index (email unique, TTL des tokens de reset), idempotents.
+    let indexes = async {
+        state.users.ensure_indexes().await?;
+        state.reset_tokens.ensure_indexes().await
+    };
+    if let Err(e) = indexes.await {
         tracing::error!(error = %e, "Création des index impossible");
         eprintln!("Démarrage impossible — création des index MongoDB en échec : {e}");
         std::process::exit(1);
