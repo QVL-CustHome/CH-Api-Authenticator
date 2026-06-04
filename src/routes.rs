@@ -6,7 +6,7 @@ use crate::middleware::tracing::correlation_and_access_log;
 use crate::state::AppState;
 use axum::Router;
 use axum::middleware::from_fn;
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -17,6 +17,7 @@ pub fn router(state: AppState) -> Router {
         .route("/validate", get(handlers::validate::validate))
         .route("/password/forgot", post(handlers::password::forgot))
         .route("/password/reset", post(handlers::password::reset))
+        .route("/password", put(handlers::password::change))
         // Endpoints protégés par l'auth interne (US-13).
         .route(
             "/me",
