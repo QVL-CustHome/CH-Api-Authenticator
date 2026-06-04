@@ -8,6 +8,18 @@
 use ipnet::IpNet;
 use std::net::IpAddr;
 
+/// Valide une liste d'entrées avant enregistrement (US-20) : chaque entrée
+/// doit être une IP ou un CIDR lisible. Rend la première entrée invalide.
+pub fn validate_entries(entries: &[String]) -> Result<(), String> {
+    for entry in entries {
+        let entry = entry.trim();
+        if entry.parse::<IpNet>().is_err() && entry.parse::<IpAddr>().is_err() {
+            return Err(entry.to_string());
+        }
+    }
+    Ok(())
+}
+
 /// `true` si `client_ip` correspond à au moins une entrée de `allowed`.
 pub fn ip_allowed(client_ip: IpAddr, allowed: &[String]) -> bool {
     allowed.iter().any(|entry| {

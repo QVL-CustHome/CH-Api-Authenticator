@@ -25,6 +25,13 @@ pub fn router(state: AppState) -> Router {
             "/me",
             get(handlers::me::get_me).put(handlers::me::update_me),
         )
+        // Administration — garde SuperAdmin (US-20).
+        .route("/users", get(handlers::admin::list_users))
+        .route("/users/{id}/roles", put(handlers::admin::update_roles))
+        .route(
+            "/users/{id}/whitelist",
+            put(handlers::admin::update_whitelist),
+        )
         // US-06 : correlation id + log d'accès sur toutes les routes.
         .layer(from_fn(correlation_and_access_log))
         .with_state(state)

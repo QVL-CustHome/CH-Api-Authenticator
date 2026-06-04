@@ -88,7 +88,8 @@ fn parse_user_id(sub: &str) -> Result<ObjectId, AppError> {
     ObjectId::parse_str(sub).map_err(|_| AppError::InvalidToken)
 }
 
-fn profile(user: User) -> MeResponse {
+/// Réutilisé par les endpoints admin (US-20) — jamais de `password_hash`.
+pub fn profile(user: User) -> MeResponse {
     MeResponse {
         user_id: user.id.map(|id| id.to_hex()).unwrap_or_default(),
         email: user.email,

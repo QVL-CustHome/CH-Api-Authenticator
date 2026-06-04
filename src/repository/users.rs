@@ -60,6 +60,70 @@ impl UserRepository {
         self.collection.find_one(doc! { "_id": id }).await
     }
 
+    /// Liste paginée (US-20), triée par date de création, avec filtre
+    /// optionnel par email exact (normalisé). Rend aussi le total.
+    pub async fn list(
+        &self,
+        skip: u64,
+        limit: i64,
+        email: Option<&str>,
+    ) -> Result<(Vec<User>, u64), mongodb::error::Error> {
+        let filter = match email {
+            Some(email) => doc! { "email": email.trim().to_lowercase() },
+            None => doc! {},
+        };
+        let total = self.collection.count_documents(filter.clone()).await?;
+        let mut cursor = self
+            .collection
+            .find(filter)
+            .sort(doc! { "created_at": 1, "_id": 1 })
+            .skip(skip)
+            .limit(limit)
+            .await?;
+        let mut users = Vec::new();
+        while cursor.advance().await? {
+            users.push(cursor.deserialize_current()?);
+        }
+        Ok((users, total))
+    }
+
+    /// Remplace la map des rôles par portail (US-20). `Ok(false)` si l'id est inconnu.
+    pub async fn update_roles(
+        &self,
+        id: ObjectId,
+        roles: &std::collections::HashMap<String, String>,
+    ) -> Result<bool, mongodb::error::Error> {
+        let roles_bson = mongodb::bson::to_bson(roles).expect("map de chaînes sérialisable");
+        let update = doc! { "$set": {
+            "roles": roles_bson,
+            "updated_at": mongodb::bson::DateTime::now(),
+        } };
+        let result = self
+            .collection
+            .update_one(doc! { "_id": id }, update)
+            .await?;
+        Ok(result.matched_count == 1)
+    }
+
+    /// Met à jour la restriction whitelist (US-20). `Ok(false)` si l'id est inconnu.
+    pub async fn update_whitelist(
+        &self,
+        id: ObjectId,
+        whitelist_only: bool,
+        allowed_ips: &[String],
+    ) -> Result<bool, mongodb::error::Error> {
+        let update = doc! { "$set": {
+            "whitelist_only": whitelist_only,
+            "allowed_ips": allowed_ips,
+            "updated_at": mongodb::bson::DateTime::now(),
+        } };
+        let result = self
+            .collection
+            .update_one(doc! { "_id": id }, update)
+            .await?;
+        Ok(result.matched_count == 1)
+    }
+
     /// Remplace le hash du mot de passe (US-18). `Ok(false)` si l'id est inconnu.
     pub async fn update_password(
         &self,
