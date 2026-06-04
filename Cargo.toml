@@ -24,6 +24,8 @@ dotenvy = "0.15"
 thiserror = "2"
 # Génération du X-Correlation-ID quand il est absent (même crate que la Gateway Go : uuid).
 uuid = { version = "1", features = ["v4"] }
+# Envoi des emails (reset de mot de passe) — TLS via rustls, pas de dépendance native.
+lettre = { version = "0.11", default-features = false, features = ["smtp-transport", "builder", "hostname", "pool", "tokio1", "tokio1-rustls-tls"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

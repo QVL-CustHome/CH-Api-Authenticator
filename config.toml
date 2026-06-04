@@ -20,3 +20,9 @@ cookie_secure = false
 # Rôles attribués automatiquement à l'inscription : { portail = "rôle" }.
 # Vide par défaut : l'attribution passe par les endpoints super-admin (sprint 2).
 default_roles = {}
+
+[email]
+# dev : les emails sont loggés (WARN) au lieu d'être envoyés — aucun serveur requis.
+# smtp : envoi réel via lettre (secrets SMTP_* dans l'environnement, voir .env.example).
+mode = "dev"
+from = "CustHome <no-reply@custhome.local>"

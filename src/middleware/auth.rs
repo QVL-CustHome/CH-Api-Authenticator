@@ -73,8 +73,11 @@ fn extract_token(parts: &Parts, cookie_name: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Config, RegistrationConfig, Secrets, ServerConfig, Settings, TokenConfig};
+    use crate::config::{
+        Config, EmailConfig, RegistrationConfig, Secrets, ServerConfig, Settings, TokenConfig,
+    };
     use crate::domain::user::User;
+    use crate::services::mailer::Mailer;
     use axum::Router;
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
@@ -109,15 +112,21 @@ mod tests {
                         cookie_secure: false,
                     },
                     registration: RegistrationConfig::default(),
+                    email: EmailConfig::default(),
                 },
                 secrets: Secrets {
                     jwt_secret: JWT_SECRET.to_string(),
                     mongo_uri: "mongodb://localhost:27017/test".to_string(),
                     admin_email: None,
                     admin_password: None,
+                    smtp_host: None,
+                    smtp_port: None,
+                    smtp_user: None,
+                    smtp_password: None,
                 },
             },
             db,
+            Mailer::Dev,
         )
     }
 

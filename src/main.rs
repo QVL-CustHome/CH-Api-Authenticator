@@ -22,6 +22,16 @@ async fn main() {
 
     init_tracing(&settings.config.server.log_level);
 
+    // US-16 : mailer construit en fail-fast (mode smtp incomplet → erreur).
+    let mailer = match ch_api_authenticator::services::mailer::Mailer::from_settings(&settings) {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::error!(error = %e, "Configuration email invalide");
+            eprintln!("Démarrage impossible — configuration email invalide : {e}");
+            std::process::exit(1);
+        }
+    };
+
     // US-01 : échec contrôlé et loggé si MongoDB est injoignable.
     let db = match repository::connect(&settings.secrets.mongo_uri).await {
         Ok(db) => db,
@@ -32,7 +42,7 @@ async fn main() {
         }
     };
 
-    let state = AppState::new(settings, db);
+    let state = AppState::new(settings, db, mailer);
 
     // US-01 : index unique sur email, idempotent.
     if let Err(e) = state.users.ensure_indexes().await {
