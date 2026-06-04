@@ -12,6 +12,12 @@ pub enum AppError {
     /// Toujours le même message, quelle que soit la cause (anti-énumération, US-03).
     #[error("identifiants invalides")]
     Unauthorized,
+    /// Token absent, malformé, expiré, falsifié ou lié à une autre IP (US-05).
+    #[error("token invalide ou expiré")]
+    InvalidToken,
+    /// Token valide mais aucun rôle sur le portail visé (US-05).
+    #[error("aucun rôle sur ce portail")]
+    Forbidden,
     #[error("{0}")]
     Conflict(&'static str),
     #[error("erreur interne")]
@@ -23,6 +29,8 @@ impl IntoResponse for AppError {
         let (status, error) = match &self {
             AppError::Validation(_) => (StatusCode::BAD_REQUEST, "bad_request"),
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
+            AppError::InvalidToken => (StatusCode::UNAUTHORIZED, "unauthorized"),
+            AppError::Forbidden => (StatusCode::FORBIDDEN, "forbidden"),
             AppError::Conflict(_) => (StatusCode::CONFLICT, "conflict"),
             AppError::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
         };
