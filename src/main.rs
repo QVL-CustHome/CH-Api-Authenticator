@@ -1,17 +1,10 @@
-mod config;
-mod domain;
-mod error;
-mod handlers;
-mod middleware;
-mod repository;
-mod routes;
-mod services;
-mod state;
-
-use config::Secrets;
-use domain::user::User;
-use repository::users::{RepositoryError, UserRepository};
-use state::AppState;
+use ch_api_authenticator::config::{self, Secrets};
+use ch_api_authenticator::domain::user::User;
+use ch_api_authenticator::repository;
+use ch_api_authenticator::repository::users::{RepositoryError, UserRepository};
+use ch_api_authenticator::routes;
+use ch_api_authenticator::services;
+use ch_api_authenticator::state::AppState;
 
 #[tokio::main]
 async fn main() {
