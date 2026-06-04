@@ -41,6 +41,36 @@ pub struct Config {
     pub registration: RegistrationConfig,
     #[serde(default)]
     pub email: EmailConfig,
+    #[serde(default)]
+    pub password_reset: PasswordResetConfig,
+}
+
+/// Réinitialisation de mot de passe par email (US-17/US-18).
+#[derive(Debug, Clone, Deserialize)]
+pub struct PasswordResetConfig {
+    /// Page du front d'auth qui consommera le token : `{url}?token=...`.
+    #[serde(default = "default_reset_url")]
+    pub url: String,
+    /// Durée de vie du token one-time, en minutes.
+    #[serde(default = "default_reset_ttl")]
+    pub ttl_minutes: u64,
+}
+
+impl Default for PasswordResetConfig {
+    fn default() -> Self {
+        Self {
+            url: default_reset_url(),
+            ttl_minutes: default_reset_ttl(),
+        }
+    }
+}
+
+fn default_reset_url() -> String {
+    "http://localhost:3000/reset-password".to_string()
+}
+
+fn default_reset_ttl() -> u64 {
+    30
 }
 
 #[derive(Debug, Clone, Deserialize)]

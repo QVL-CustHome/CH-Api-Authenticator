@@ -26,3 +26,9 @@ default_roles = {}
 # smtp : envoi réel via lettre (secrets SMTP_* dans l'environnement, voir .env.example).
 mode = "dev"
 from = "CustHome <no-reply@custhome.local>"
+
+[password_reset]
+# Page du front d'auth qui consommera le token : {url}?token=...
+url = "http://localhost:3000/reset-password"
+# Durée de vie du token one-time (minutes) — purge automatique (index TTL Mongo).
+ttl_minutes = 30
