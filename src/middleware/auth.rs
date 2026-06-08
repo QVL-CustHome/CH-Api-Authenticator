@@ -35,11 +35,16 @@ impl FromRequestParts<AppState> for AuthUser {
     }
 }
 
-/// Utilisateur authentifié ET super-admin global — garde des endpoints
-/// d'administration (US-20). `403` pour tout autre compte.
-pub struct SuperAdmin(pub Claims);
+/// Portail logique dont le rôle `admin` ouvre l'administration (US-8.2).
+pub const ADMIN_PORTAL: &str = "portail_admin";
+/// Rôle requis sur [`ADMIN_PORTAL`] pour administrer.
+pub const ADMIN_ROLE: &str = "admin";
 
-impl FromRequestParts<AppState> for SuperAdmin {
+/// Utilisateur authentifié ET administrateur du portail d'administration :
+/// rôle `admin` sur `portail_admin` (US-8.2). `403` pour tout autre compte.
+pub struct PortalAdmin(pub Claims);
+
+impl FromRequestParts<AppState> for PortalAdmin {
     type Rejection = AppError;
 
     async fn from_request_parts(
@@ -47,10 +52,11 @@ impl FromRequestParts<AppState> for SuperAdmin {
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
         let AuthUser(claims) = AuthUser::from_request_parts(parts, state).await?;
-        if !claims.super_admin {
-            return Err(AppError::Forbidden("accès réservé au super-admin"));
+        let is_admin = claims.roles.iter().any(|r| r == ADMIN_ROLE);
+        if !is_admin {
+            return Err(AppError::Forbidden("accès réservé aux administrateurs"));
         }
-        Ok(SuperAdmin(claims))
+        Ok(PortalAdmin(claims))
     }
 }
 
@@ -83,7 +89,6 @@ mod tests {
     use axum::http::{Request, StatusCode};
     use axum::routing::get;
     use mongodb::bson::oid::ObjectId;
-    use std::collections::HashMap;
     use tower::ServiceExt;
 
     const JWT_SECRET: &str = "un-secret-de-test-suffisamment-long!!!!!";
@@ -133,7 +138,7 @@ mod tests {
         )
     }
 
-    /// Routeur de test : une route protégée AuthUser, une route garde SuperAdmin.
+    /// Routeur de test : une route protégée AuthUser, une route garde PortalAdmin.
     fn test_router(state: AppState) -> Router {
         Router::new()
             .route(
@@ -141,21 +146,27 @@ mod tests {
                 get(|AuthUser(claims): AuthUser| async move { claims.sub }),
             )
             .route(
-                "/admin",
-                get(|SuperAdmin(claims): SuperAdmin| async move { claims.sub }),
+                "/portal-admin",
+                get(|PortalAdmin(claims): PortalAdmin| async move { claims.sub }),
             )
             .with_state(state)
     }
 
-    fn token_for(state: &AppState, super_admin: bool) -> (String, String) {
-        let mut user = if super_admin {
-            User::new_super_admin("admin@test.fr", "$argon2id$hash".to_string())
-        } else {
-            User::new("user@test.fr", "$argon2id$hash".to_string(), HashMap::new())
-        };
+    fn token_for(state: &AppState) -> (String, String) {
+        let mut user = User::new("user@test.fr", "$argon2id$hash".to_string(), Vec::new());
         user.id = Some(ObjectId::new());
         let token = state.jwt.issue(&user, None).unwrap();
         (token, user.id.unwrap().to_hex())
+    }
+
+    fn token_for_roles(state: &AppState, roles: &[&str]) -> String {
+        let mut user = User::new(
+            "padmin@test.fr",
+            "$argon2id$hash".to_string(),
+            roles.iter().map(|r| r.to_string()).collect(),
+        );
+        user.id = Some(ObjectId::new());
+        state.jwt.issue(&user, None).unwrap()
     }
 
     async fn get_status(
@@ -182,7 +193,7 @@ mod tests {
     #[tokio::test]
     async fn token_valide_en_header_200_avec_claims() {
         let state = test_state();
-        let (token, user_id) = token_for(&state, false);
+        let (token, user_id) = token_for(&state);
 
         let (status, body) = get_status(
             state,
@@ -198,7 +209,7 @@ mod tests {
     #[tokio::test]
     async fn token_valide_en_cookie_200() {
         let state = test_state();
-        let (token, _) = token_for(&state, false);
+        let (token, _) = token_for(&state);
 
         let (status, _) = get_status(
             state,
@@ -213,9 +224,8 @@ mod tests {
     #[tokio::test]
     async fn header_prime_sur_le_cookie() {
         let state = test_state();
-        let (token, user_id) = token_for(&state, false);
+        let (token, user_id) = token_for(&state);
 
-        // Cookie pourri + header valide → le header gagne.
         let (status, body) = get_status(
             state,
             "/protege",
@@ -233,9 +243,8 @@ mod tests {
     #[tokio::test]
     async fn header_malforme_401_sans_repli_cookie() {
         let state = test_state();
-        let (token, _) = token_for(&state, false);
+        let (token, _) = token_for(&state);
 
-        // Header présent mais pas un Bearer : pas de repli sur le cookie valide.
         let (status, _) = get_status(
             state,
             "/protege",
@@ -252,7 +261,7 @@ mod tests {
     #[tokio::test]
     async fn tokens_invalides_401() {
         let state = test_state();
-        let (token, _) = token_for(&state, false);
+        let (token, _) = token_for(&state);
         let falsifie = format!("{}AAAA", &token[..token.len() - 4]);
 
         for (label, headers) in [
@@ -289,7 +298,6 @@ mod tests {
     #[tokio::test]
     async fn token_expire_401() {
         let state = test_state();
-        // Token forgé avec le bon secret mais expiré.
         let expired = {
             use jsonwebtoken::{Algorithm, EncodingKey, Header};
             let now = std::time::SystemTime::now()
@@ -297,7 +305,7 @@ mod tests {
                 .unwrap()
                 .as_secs();
             let claims = serde_json::json!({
-                "sub": "x", "roles": {}, "super_admin": false,
+                "sub": "x", "roles": {},
                 "iat": now - 3600, "exp": now - 600,
             });
             jsonwebtoken::encode(
@@ -318,42 +326,40 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn garde_super_admin_403_pour_un_utilisateur_normal() {
+    async fn garde_portal_admin_401_sans_token() {
         let state = test_state();
-        let (token, _) = token_for(&state, false);
-
-        let (status, _) = get_status(
-            state,
-            "/admin",
-            &[("Authorization", &format!("Bearer {token}"))],
-        )
-        .await;
-        assert_eq!(status, StatusCode::FORBIDDEN);
-    }
-
-    #[tokio::test]
-    async fn garde_super_admin_200_pour_un_super_admin() {
-        let state = test_state();
-        let (token, user_id) = token_for(&state, true);
-
-        let (status, body) = get_status(
-            state,
-            "/admin",
-            &[("Authorization", &format!("Bearer {token}"))],
-        )
-        .await;
-        assert_eq!(status, StatusCode::OK);
-        assert_eq!(body, user_id);
-    }
-
-    #[tokio::test]
-    async fn garde_super_admin_401_sans_token() {
-        let state = test_state();
-        let (status, _) = get_status(state, "/admin", &[]).await;
+        let (status, _) = get_status(state, "/portal-admin", &[]).await;
         assert_eq!(
             status,
             StatusCode::UNAUTHORIZED,
             "non authentifié : 401, pas 403"
         );
+    }
+
+    #[tokio::test]
+    async fn garde_portal_admin_200_pour_role_admin_sur_portail_admin() {
+        let state = test_state();
+        let token = token_for_roles(&state, &["admin"]);
+        let (status, _) = get_status(
+            state,
+            "/portal-admin",
+            &[("Authorization", &format!("Bearer {token}"))],
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn garde_portal_admin_403_sans_le_bon_role() {
+        let state = test_state();
+        // Un rôle autre qu'`admin` : insuffisant.
+        let token = token_for_roles(&state, &["editor"]);
+        let (status, _) = get_status(
+            state,
+            "/portal-admin",
+            &[("Authorization", &format!("Bearer {token}"))],
+        )
+        .await;
+        assert_eq!(status, StatusCode::FORBIDDEN);
     }
 }

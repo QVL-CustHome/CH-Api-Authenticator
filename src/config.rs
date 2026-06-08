@@ -9,7 +9,6 @@
 use figment::Figment;
 use figment::providers::{Env, Format, Toml};
 use serde::Deserialize;
-use std::collections::HashMap;
 
 /// Taille minimale du secret JWT, en octets.
 pub const MIN_JWT_SECRET_BYTES: usize = 32;
@@ -107,10 +106,10 @@ fn default_refresh_cookie_name() -> String {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct RegistrationConfig {
-    /// Rôles attribués à l'inscription : `{ portail = "rôle" }`. Vide par défaut,
-    /// l'attribution passe sinon par les endpoints super-admin (sprint 2).
+    /// Rôles attribués à l'inscription : `{ portail = ["rôle"] }`. Vide par
+    /// défaut ; l'attribution passe sinon par les endpoints d'administration.
     #[serde(default)]
-    pub default_roles: HashMap<String, String>,
+    pub default_roles: Vec<String>,
 }
 
 /// Envoi des emails (US-16). En mode `dev`, les emails sont loggés au lieu

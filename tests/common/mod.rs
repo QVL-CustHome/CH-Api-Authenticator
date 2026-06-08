@@ -20,6 +20,7 @@ use ch_api_authenticator::services::password;
 use ch_api_authenticator::state::AppState;
 use http_body_util::BodyExt;
 use mongodb::Database;
+use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -43,10 +44,11 @@ pub async fn test_state(db: &Database) -> AppState {
 pub async fn test_state_with(
     db: &Database,
     cookie_secure: bool,
-    default_roles: HashMap<String, String>,
+    default_roles: HashMap<String, Vec<String>>,
 ) -> AppState {
     let state = state_for_db(db, cookie_secure, default_roles);
     state.users.ensure_indexes().await.unwrap();
+    state.roles.ensure_indexes().await.unwrap();
     state.reset_tokens.ensure_indexes().await.unwrap();
     state
 }
@@ -55,7 +57,7 @@ pub async fn test_state_with(
 pub fn state_for_db(
     db: &Database,
     cookie_secure: bool,
-    default_roles: HashMap<String, String>,
+    default_roles: HashMap<String, Vec<String>>,
 ) -> AppState {
     state_with_mailer(db, cookie_secure, default_roles, Mailer::Dev)
 }
@@ -65,6 +67,7 @@ pub async fn test_state_with_outbox(db: &Database) -> (AppState, Arc<Mutex<Vec<S
     let (mailer, outbox) = Mailer::memory();
     let state = state_with_mailer(db, false, HashMap::new(), mailer);
     state.users.ensure_indexes().await.unwrap();
+    state.roles.ensure_indexes().await.unwrap();
     state.reset_tokens.ensure_indexes().await.unwrap();
     (state, outbox)
 }
@@ -72,7 +75,7 @@ pub async fn test_state_with_outbox(db: &Database) -> (AppState, Arc<Mutex<Vec<S
 pub fn state_with_mailer(
     db: &Database,
     cookie_secure: bool,
-    default_roles: HashMap<String, String>,
+    default_roles: HashMap<String, Vec<String>>,
     mailer: Mailer,
 ) -> AppState {
     AppState::new(
@@ -89,7 +92,9 @@ pub fn state_with_mailer(
                     refresh_ttl_days: 7,
                     refresh_cookie_name: "ch_refresh".to_string(),
                 },
-                registration: RegistrationConfig { default_roles },
+                registration: RegistrationConfig {
+                    default_roles: default_roles.into_values().flatten().collect(),
+                },
                 email: EmailConfig::default(),
                 password_reset: PasswordResetConfig::default(),
             },
@@ -125,15 +130,16 @@ pub fn broken_db() -> Database {
 }
 
 /// Insère un utilisateur avec le mot de passe [`PASSWORD`] et rend l'utilisateur persisté.
-pub async fn seed_user(state: &AppState, email: &str, roles: HashMap<String, String>) -> User {
-    let mut user = User::new(email, password::hash(PASSWORD).unwrap(), roles);
+pub async fn seed_user(state: &AppState, email: &str, roles: HashMap<String, Vec<String>>) -> User {
+    let flat: Vec<String> = roles.into_values().flatten().collect();
+    let mut user = User::new(email, password::hash(PASSWORD).unwrap(), flat);
     let id = state.users.insert(&user).await.unwrap();
     user.id = Some(id);
     user
 }
 
 pub async fn seed_whitelist_user(state: &AppState, email: &str, allowed_ips: &[&str]) -> User {
-    let mut user = User::new(email, password::hash(PASSWORD).unwrap(), HashMap::new());
+    let mut user = User::new(email, password::hash(PASSWORD).unwrap(), Vec::new());
     user.whitelist_only = true;
     user.allowed_ips = allowed_ips.iter().map(|s| s.to_string()).collect();
     let id = state.users.insert(&user).await.unwrap();
@@ -141,17 +147,41 @@ pub async fn seed_whitelist_user(state: &AppState, email: &str, allowed_ips: &[&
     user
 }
 
-pub async fn seed_super_admin(state: &AppState, email: &str) -> User {
-    let mut user = User::new_super_admin(email, password::hash(PASSWORD).unwrap());
+/// Insère un compte administrateur (rôle admin sur portail_admin) — remplace
+/// l'ancien super-admin global supprimé. Le compte est actif.
+pub async fn seed_admin(state: &AppState, email: &str) -> User {
+    let mut user = User::new(
+        email,
+        password::hash(PASSWORD).unwrap(),
+        vec!["admin".to_string()],
+    );
     let id = state.users.insert(&user).await.unwrap();
     user.id = Some(id);
     user
 }
 
-pub fn roles(entries: &[(&str, &str)]) -> HashMap<String, String> {
+/// Active un compte fraîchement inscrit (créé « en attente de validation »)
+/// par une mise à jour directe, en attendant l'endpoint d'administration (US-8.2).
+pub async fn activate_user(db: &Database, email: &str) {
+    db.collection::<mongodb::bson::Document>("users")
+        .update_one(
+            doc! { "email": email.trim().to_lowercase() },
+            doc! { "$set": { "status": "active" } },
+        )
+        .await
+        .unwrap();
+}
+
+/// Insère un rôle (nom) dans le catalogue (US-8.3), prérequis à toute attribution.
+pub async fn seed_role(state: &AppState, name: &str) {
+    let role = ch_api_authenticator::domain::role::Role::new(name);
+    state.roles.insert(&role).await.unwrap();
+}
+
+pub fn roles(entries: &[(&str, &str)]) -> HashMap<String, Vec<String>> {
     entries
         .iter()
-        .map(|(portal, role)| (portal.to_string(), role.to_string()))
+        .map(|(portal, role)| (portal.to_string(), vec![role.to_string()]))
         .collect()
 }
 

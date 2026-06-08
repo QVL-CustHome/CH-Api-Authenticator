@@ -20,9 +20,9 @@ refresh_ttl_days = 7
 refresh_cookie_name = "ch_refresh"
 
 [registration]
-# Rôles attribués automatiquement à l'inscription : { portail = "rôle" }.
-# Vide par défaut : l'attribution passe par les endpoints super-admin (sprint 2).
-default_roles = {}
+# Rôles (globaux) attribués automatiquement à l'inscription : ["role", ...].
+# Vide par défaut : l'attribution passe par les endpoints d'administration.
+default_roles = []
 
 [email]
 # dev : les emails sont loggés (WARN) au lieu d'être envoyés — aucun serveur requis.

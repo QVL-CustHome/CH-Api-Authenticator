@@ -1,25 +1,21 @@
 //! Émission (US-03) et validation (US-05) des JWT HS256.
 //!
 //! Le token embarque tout ce dont `/validate` a besoin pour répondre
-//! sans aucune I/O (contrat Gateway < 100 ms) : rôles par portail,
-//! flag super-admin et IP de login pour les comptes whitelist (US-04).
+//! sans aucune I/O (contrat Gateway < 100 ms) : rôles par portail et
+//! IP de login pour les comptes whitelist (US-04).
 
 use crate::domain::user::User;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
     /// Identifiant utilisateur (ObjectId hexadécimal).
     pub sub: String,
-    /// Rôle par portail : `{ "portail_a": "admin" }`.
-    #[serde(default)]
-    pub roles: HashMap<String, String>,
-    /// Super-admin global : admin sur tous les portails (US-05).
-    #[serde(default)]
-    pub super_admin: bool,
+    /// Rôles globaux de l'utilisateur : ex. `["admin"]`.
+    #[serde(default, deserialize_with = "crate::domain::user::deserialize_roles")]
+    pub roles: Vec<String>,
     /// IP de login, présente uniquement pour les comptes `whitelist_only` (US-04).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ip: Option<String>,
@@ -59,7 +55,6 @@ impl JwtService {
                 .map(|id| id.to_hex())
                 .expect("utilisateur persisté : id renseigné"),
             roles: user.roles.clone(),
-            super_admin: user.is_super_admin,
             ip,
             iat: now,
             exp: now + self.ttl.as_secs(),
@@ -94,7 +89,7 @@ mod tests {
         let mut user = User::new(
             "martin@test.fr",
             "$argon2id$hash".to_string(),
-            HashMap::from([("portail_a".to_string(), "admin".to_string())]),
+            vec!["admin".to_string()],
         );
         user.id = Some(ObjectId::new());
         user
@@ -109,11 +104,7 @@ mod tests {
         let claims = service.validate(&token).unwrap();
 
         assert_eq!(claims.sub, user.id.unwrap().to_hex());
-        assert_eq!(
-            claims.roles.get("portail_a").map(String::as_str),
-            Some("admin")
-        );
-        assert!(!claims.super_admin);
+        assert_eq!(claims.roles, vec!["admin".to_string()]);
         assert_eq!(claims.ip, None);
         assert_eq!(claims.exp - claims.iat, 15 * 60);
     }
@@ -135,8 +126,7 @@ mod tests {
         let now = unix_now();
         let claims = Claims {
             sub: "x".to_string(),
-            roles: HashMap::new(),
-            super_admin: false,
+            roles: Vec::new(),
             ip: None,
             iat: now - 3600,
             exp: now - 600,

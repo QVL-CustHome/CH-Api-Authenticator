@@ -3,6 +3,7 @@
 use crate::config::Settings;
 use crate::repository::refresh_tokens::RefreshTokenRepository;
 use crate::repository::reset_tokens::ResetTokenRepository;
+use crate::repository::roles::RoleRepository;
 use crate::repository::users::UserRepository;
 use crate::services::jwt::JwtService;
 use crate::services::mailer::Mailer;
@@ -15,6 +16,8 @@ pub struct AppState {
     /// Handle base : ping du health check (US-07).
     pub db: Database,
     pub users: UserRepository,
+    /// Catalogue des rôles attribuables par portail (US-8.3).
+    pub roles: RoleRepository,
     /// Tokens one-time de réinitialisation de mot de passe (US-17/18).
     pub reset_tokens: ResetTokenRepository,
     /// Refresh tokens à rotation (US-19).
@@ -33,6 +36,7 @@ impl AppState {
         Self {
             settings: Arc::new(settings),
             users: UserRepository::new(&db),
+            roles: RoleRepository::new(&db),
             reset_tokens: ResetTokenRepository::new(&db),
             refresh_tokens: RefreshTokenRepository::new(&db),
             db,

@@ -68,10 +68,7 @@ async fn rotation_nominale() {
     // Nouveau couple : access valide (claims relus), refresh différent.
     let access = response.body["access_token"].as_str().unwrap();
     let claims = state.jwt.validate(access).unwrap();
-    assert_eq!(
-        claims.roles.get("portail_a").map(String::as_str),
-        Some("user")
-    );
+    assert_eq!(claims.roles, vec!["user".to_string()]);
     let refresh2 = response.body["refresh_token"].as_str().unwrap().to_string();
     assert_ne!(refresh1, refresh2, "le refresh token tourne à chaque usage");
 
@@ -215,10 +212,7 @@ async fn changement_de_roles_pris_en_compte_a_la_rotation() {
         .jwt
         .validate(response.body["access_token"].as_str().unwrap())
         .unwrap();
-    assert_eq!(
-        claims.roles.get("portail_a").map(String::as_str),
-        Some("admin")
-    );
+    assert_eq!(claims.roles, vec!["admin".to_string()]);
 
     db.drop().await.unwrap();
 }

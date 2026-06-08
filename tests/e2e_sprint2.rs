@@ -61,26 +61,32 @@ async fn validate_status(state: &State, token: &str, portal: &str) -> StatusCode
 async fn cycle_de_vie_complet_d_un_compte() {
     let db = test_db().await;
     let state = test_state(&db).await;
-    seed_super_admin(&state, "root@custhome.fr").await;
+    seed_admin(&state, "root@custhome.fr").await;
     let admin = login_token(&state, "root@custhome.fr").await;
 
     // 1. Inscription : aucun accès.
     let register = post_json(
         router(state.clone()),
         "/register",
-        r#"{"email": "vie@custhome.fr", "password": "premier-mdp-solide"}"#,
+        r#"{"name": "Vie", "email": "vie@custhome.fr", "password": "premier-mdp-solide"}"#,
         &[],
     )
     .await;
     assert_eq!(register.status, StatusCode::CREATED);
     let user_id = register.body["user_id"].as_str().unwrap().to_string();
 
+    // US-8.1 : le compte est créé en attente ; un admin l'active (activation
+    // directe en attendant l'endpoint d'administration, US-8.2).
+    activate_user(&db, "vie@custhome.fr").await;
+    // US-8.3 : le rôle attribué doit exister au catalogue.
+    seed_role(&state, "user").await;
+
     // 2. Le super-admin attribue un rôle VIA L'API.
     let (status, _) = put_json_auth(
         &state,
         &format!("/users/{user_id}/roles"),
         &admin,
-        r#"{"roles": {"portail_a": "user"}}"#,
+        r#"{"roles": ["user"]}"#,
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -108,7 +114,7 @@ async fn cycle_de_vie_complet_d_un_compte() {
         &[("Authorization", &format!("Bearer {access}"))],
     )
     .await;
-    assert_eq!(me.body["roles"]["portail_a"], "user");
+    assert_eq!(me.body["roles"][0], "user");
 
     // 5. Rotation : le nouveau access token donne toujours accès.
     let rotated = post_json(
@@ -185,10 +191,11 @@ async fn parcours_reset_integral() {
     post_json(
         router(state.clone()),
         "/register",
-        r#"{"email": "oubli@custhome.fr", "password": "mdp-oublie-bientot"}"#,
+        r#"{"name": "Oubli", "email": "oubli@custhome.fr", "password": "mdp-oublie-bientot"}"#,
         &[],
     )
     .await;
+    activate_user(&db, "oubli@custhome.fr").await;
 
     // Session ouverte AVANT le reset : elle devra tomber.
     let login = post_json(
@@ -271,24 +278,26 @@ async fn parcours_reset_integral() {
 async fn whitelist_administree_de_bout_en_bout() {
     let db = test_db().await;
     let state = test_state(&db).await;
-    seed_super_admin(&state, "root@custhome.fr").await;
+    seed_admin(&state, "root@custhome.fr").await;
     let admin = login_token(&state, "root@custhome.fr").await;
 
     let register = post_json(
         router(state.clone()),
         "/register",
-        r#"{"email": "fixe@custhome.fr", "password": "mdp-poste-fixe!"}"#,
+        r#"{"name": "Fixe", "email": "fixe@custhome.fr", "password": "mdp-poste-fixe!"}"#,
         &[],
     )
     .await;
     let user_id = register.body["user_id"].as_str().unwrap().to_string();
+    activate_user(&db, "fixe@custhome.fr").await;
+    seed_role(&state, "user").await;
 
     // L'admin attribue un rôle ET active la whitelist via l'API.
     put_json_auth(
         &state,
         &format!("/users/{user_id}/roles"),
         &admin,
-        r#"{"roles": {"portail_a": "user"}}"#,
+        r#"{"roles": ["user"]}"#,
     )
     .await;
     let (status, _) = put_json_auth(

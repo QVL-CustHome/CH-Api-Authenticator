@@ -1,18 +1,22 @@
-//! Administration des comptes — réservée au super-admin (US-20).
-//!
-//! Chaque action est tracée avec l'identifiant de l'admin (audit léger).
+//! Administration des comptes — réservée aux administrateurs du portail
+//! d'administration (super-admin global ou rôle `admin` sur `portail_admin`,
+//! US-20 / US-8.2). Chaque action est tracée avec l'identifiant de l'admin.
 
+use crate::domain::user::AccountStatus;
 use crate::error::AppError;
 use crate::handlers::me::{MeResponse, profile};
-use crate::middleware::auth::SuperAdmin;
-use crate::services::whitelist;
+use crate::middleware::auth::PortalAdmin;
+use crate::repository::users::RepositoryError;
+use crate::services::{password, whitelist};
 use crate::state::AppState;
+use crate::validation::PASSWORD_MIN_CHARS;
 use axum::Json;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{Path, Query, State};
+use axum::http::StatusCode;
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use validator::Validate;
 
 const DEFAULT_LIMIT: i64 = 20;
 const MAX_LIMIT: i64 = 100;
@@ -23,6 +27,8 @@ pub struct ListQuery {
     pub limit: Option<i64>,
     /// Filtre par email exact (normalisé lowercase).
     pub email: Option<String>,
+    /// Filtre par état : `active` / `pending_validation` / `disabled` (US-8.2).
+    pub status: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -36,16 +42,17 @@ pub struct UserListResponse {
 /// `GET /users?page&limit&email` → liste paginée, sans `password_hash`.
 pub async fn list_users(
     State(state): State<AppState>,
-    SuperAdmin(_admin): SuperAdmin,
+    PortalAdmin(_admin): PortalAdmin,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<UserListResponse>, AppError> {
     let page = query.page.unwrap_or(1).max(1);
     let limit = query.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
     let skip = (page - 1) * limit as u64;
+    let status = query.status.as_deref().map(parse_status).transpose()?;
 
     let (users, total) = state
         .users
-        .list(skip, limit, query.email.as_deref())
+        .list(skip, limit, query.email.as_deref(), status)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Liste des utilisateurs en échec");
@@ -60,29 +67,65 @@ pub async fn list_users(
     }))
 }
 
-#[derive(Deserialize)]
-pub struct UpdateRolesRequest {
-    pub roles: HashMap<String, String>,
+/// `GET /users/pending` → comptes en attente de validation (alerte dashboard, US-8.2).
+pub async fn list_pending(
+    State(state): State<AppState>,
+    PortalAdmin(_admin): PortalAdmin,
+    Query(query): Query<ListQuery>,
+) -> Result<Json<UserListResponse>, AppError> {
+    let page = query.page.unwrap_or(1).max(1);
+    let limit = query.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
+    let skip = (page - 1) * limit as u64;
+
+    let (users, total) = state
+        .users
+        .list(skip, limit, None, Some(AccountStatus::PendingValidation))
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "Liste des comptes en attente en échec");
+            AppError::Internal
+        })?;
+
+    Ok(Json(UserListResponse {
+        users: users.into_iter().map(profile).collect(),
+        page,
+        limit,
+        total,
+    }))
 }
 
-/// `PUT /users/{id}/roles` → remplace la map `{portail: rôle}`.
+#[derive(Deserialize)]
+pub struct UpdateRolesRequest {
+    pub roles: Vec<String>,
+}
+
+/// `PUT /users/{id}/roles` → remplace la liste des rôles (globaux).
 pub async fn update_roles(
     State(state): State<AppState>,
-    SuperAdmin(admin): SuperAdmin,
+    PortalAdmin(admin): PortalAdmin,
     Path(id): Path<String>,
     payload: Result<Json<UpdateRolesRequest>, JsonRejection>,
 ) -> Result<Json<MeResponse>, AppError> {
     let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
 
-    // Des clés ou rôles vides rendraient le portail injoignable au /validate.
-    if request
-        .roles
-        .iter()
-        .any(|(portal, role)| portal.trim().is_empty() || role.trim().is_empty())
-    {
+    // Un nom de rôle vide est interdit.
+    if request.roles.iter().any(|role| role.trim().is_empty()) {
         return Err(AppError::Validation(
-            "les portails et rôles ne peuvent pas être vides".to_string(),
+            "les rôles ne peuvent pas être vides".to_string(),
         ));
+    }
+
+    // US-8.3 : chaque rôle attribué doit exister dans le catalogue (par nom).
+    for role in &request.roles {
+        let exists = state.roles.exists(role).await.map_err(|e| {
+            tracing::error!(error = %e, "Vérification du rôle en échec");
+            AppError::Internal
+        })?;
+        if !exists {
+            return Err(AppError::Validation(format!(
+                "rôle inexistant dans le catalogue : {role}"
+            )));
+        }
     }
 
     let user_id = parse_target_id(&id)?;
@@ -119,7 +162,7 @@ pub struct UpdateWhitelistRequest {
 /// `PUT /users/{id}/whitelist` → active/désactive la restriction IP.
 pub async fn update_whitelist(
     State(state): State<AppState>,
-    SuperAdmin(admin): SuperAdmin,
+    PortalAdmin(admin): PortalAdmin,
     Path(id): Path<String>,
     payload: Result<Json<UpdateWhitelistRequest>, JsonRejection>,
 ) -> Result<Json<MeResponse>, AppError> {
@@ -158,6 +201,168 @@ pub async fn update_whitelist(
     );
 
     load_profile(&state, user_id).await
+}
+
+#[derive(Deserialize)]
+pub struct UpdateStatusRequest {
+    pub status: AccountStatus,
+}
+
+/// `PUT /users/{id}/status` → active / désactive / remet en attente un compte (US-8.2).
+pub async fn update_status(
+    State(state): State<AppState>,
+    PortalAdmin(admin): PortalAdmin,
+    Path(id): Path<String>,
+    payload: Result<Json<UpdateStatusRequest>, JsonRejection>,
+) -> Result<Json<MeResponse>, AppError> {
+    let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
+
+    let user_id = parse_target_id(&id)?;
+    let updated = state
+        .users
+        .update_status(user_id, request.status)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "Mise à jour du statut en échec");
+            AppError::Internal
+        })?;
+    if !updated {
+        return Err(AppError::NotFound("utilisateur inconnu"));
+    }
+
+    tracing::info!(
+        admin_id = %admin.sub,
+        target_id = %user_id,
+        status = ?request.status,
+        "Admin : statut du compte modifié"
+    );
+
+    load_profile(&state, user_id).await
+}
+
+#[derive(Deserialize, Validate)]
+pub struct UpdateUserRequest {
+    #[validate(length(min = 1, message = "le nom est requis"))]
+    pub name: String,
+    #[validate(email(message = "format d'email invalide"))]
+    pub email: String,
+}
+
+/// `PUT /users/{id}` → modifie le nom et l'email d'un compte (US-8.x).
+pub async fn update_user(
+    State(state): State<AppState>,
+    PortalAdmin(admin): PortalAdmin,
+    Path(id): Path<String>,
+    payload: Result<Json<UpdateUserRequest>, JsonRejection>,
+) -> Result<Json<MeResponse>, AppError> {
+    let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
+    request
+        .validate()
+        .map_err(|_| AppError::Validation("nom ou email invalide".to_string()))?;
+    if request.name.trim().is_empty() {
+        return Err(AppError::Validation("le nom est requis".to_string()));
+    }
+
+    let user_id = parse_target_id(&id)?;
+    let email = request.email.trim().to_lowercase();
+    match state.users.update_email(user_id, &email).await {
+        Ok(true) => {}
+        Ok(false) => return Err(AppError::NotFound("utilisateur inconnu")),
+        Err(RepositoryError::DuplicateEmail) => {
+            return Err(AppError::Conflict("email déjà utilisé"));
+        }
+        Err(RepositoryError::Database(e)) => {
+            tracing::error!(error = %e, "Mise à jour de l'email (admin) en échec");
+            return Err(AppError::Internal);
+        }
+    }
+
+    state
+        .users
+        .update_name(user_id, request.name.trim())
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "Mise à jour du nom (admin) en échec");
+            AppError::Internal
+        })?;
+
+    tracing::info!(admin_id = %admin.sub, target_id = %user_id, "Admin : profil modifié");
+    load_profile(&state, user_id).await
+}
+
+/// `GET /users/{id}` → profil d'un compte (US-8.2).
+pub async fn get_user(
+    State(state): State<AppState>,
+    PortalAdmin(_admin): PortalAdmin,
+    Path(id): Path<String>,
+) -> Result<Json<MeResponse>, AppError> {
+    let user_id = parse_target_id(&id)?;
+    load_profile(&state, user_id).await
+}
+
+/// `DELETE /users/{id}` → supprime définitivement un compte (US-8.2).
+pub async fn delete_user(
+    State(state): State<AppState>,
+    PortalAdmin(admin): PortalAdmin,
+    Path(id): Path<String>,
+) -> Result<StatusCode, AppError> {
+    let user_id = parse_target_id(&id)?;
+    let deleted = state.users.delete(user_id).await.map_err(|e| {
+        tracing::error!(error = %e, "Suppression du compte en échec");
+        AppError::Internal
+    })?;
+    if !deleted {
+        return Err(AppError::NotFound("utilisateur inconnu"));
+    }
+
+    tracing::info!(admin_id = %admin.sub, target_id = %user_id, "Admin : compte supprimé");
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize, Validate)]
+pub struct UpdatePasswordRequest {
+    #[validate(length(min = "PASSWORD_MIN_CHARS", message = "mot de passe trop court"))]
+    pub password: String,
+}
+
+/// `PUT /users/{id}/password` → réinitialise le mot de passe d'un compte (US-8.x).
+pub async fn update_password(
+    State(state): State<AppState>,
+    PortalAdmin(admin): PortalAdmin,
+    Path(id): Path<String>,
+    payload: Result<Json<UpdatePasswordRequest>, JsonRejection>,
+) -> Result<StatusCode, AppError> {
+    let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
+    request
+        .validate()
+        .map_err(|_| AppError::Validation("mot de passe trop court".to_string()))?;
+
+    let user_id = parse_target_id(&id)?;
+    let hash = password::hash(&request.password).map_err(|_| AppError::Internal)?;
+    let updated = state
+        .users
+        .update_password(user_id, &hash)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "Réinitialisation du mot de passe en échec");
+            AppError::Internal
+        })?;
+    if !updated {
+        return Err(AppError::NotFound("utilisateur inconnu"));
+    }
+
+    tracing::info!(admin_id = %admin.sub, target_id = %user_id, "Admin : mot de passe réinitialisé");
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// Convertit le filtre de statut de la query string en [`AccountStatus`].
+fn parse_status(raw: &str) -> Result<AccountStatus, AppError> {
+    match raw {
+        "active" => Ok(AccountStatus::Active),
+        "disabled" => Ok(AccountStatus::Disabled),
+        "pending_validation" | "pending" => Ok(AccountStatus::PendingValidation),
+        other => Err(AppError::Validation(format!("statut inconnu : {other}"))),
+    }
 }
 
 /// Un id illisible est traité comme un utilisateur inconnu (404).

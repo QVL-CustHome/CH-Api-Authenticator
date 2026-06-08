@@ -35,12 +35,15 @@ async fn parcours_nominal_register_login_validate_multi_portail() {
     let register = post_json(
         router(state.clone()),
         "/register",
-        r#"{"email": "E2E@CustHome.FR", "password": "motdepasse-e2e"}"#,
+        r#"{"name": "E2E", "email": "E2E@CustHome.FR", "password": "motdepasse-e2e"}"#,
         &[],
     )
     .await;
     assert_eq!(register.status, StatusCode::CREATED);
     let user_id = register.body["user_id"].as_str().unwrap().to_string();
+
+    // US-8.1 : un admin valide le compte (activation directe en attendant l'endpoint, US-8.2).
+    activate_user(&db, "e2e@custhome.fr").await;
 
     // 2. Connexion avec l'email dans une autre casse.
     let login = post_json(
@@ -87,7 +90,7 @@ async fn parcours_nominal_register_login_validate_multi_portail() {
     .await;
     assert_eq!(via_cookie.status, StatusCode::OK);
 
-    // 4. Aucun rôle sur un autre portail → 403.
+    // 4. Rôles globaux : le même rôle vaut sur n'importe quel autre portail.
     let autre_portail = get(
         router(state),
         "/validate",
@@ -97,7 +100,7 @@ async fn parcours_nominal_register_login_validate_multi_portail() {
         ],
     )
     .await;
-    assert_eq!(autre_portail.status, StatusCode::FORBIDDEN);
+    assert_eq!(autre_portail.status, StatusCode::OK);
 
     db.drop().await.unwrap();
 }
@@ -112,7 +115,7 @@ async fn parcours_whitelist_de_bout_en_bout() {
     let register = post_json(
         router(state.clone()),
         "/register",
-        r#"{"email": "wl.e2e@custhome.fr", "password": "motdepasse-e2e"}"#,
+        r#"{"name": "WL", "email": "wl.e2e@custhome.fr", "password": "motdepasse-e2e"}"#,
         &[],
     )
     .await;
@@ -120,7 +123,8 @@ async fn parcours_whitelist_de_bout_en_bout() {
     db.collection::<mongodb::bson::Document>("users")
         .update_one(
             doc! { "email": "wl.e2e@custhome.fr" },
-            doc! { "$set": { "whitelist_only": true, "allowed_ips": ["10.1.2.3", "192.168.0.0/16"] } },
+            // US-8.1 : on active aussi le compte, sinon le login serait refusé.
+            doc! { "$set": { "status": "active", "whitelist_only": true, "allowed_ips": ["10.1.2.3", "192.168.0.0/16"] } },
         )
         .await
         .unwrap();
@@ -181,10 +185,11 @@ async fn cascade_des_cas_d_erreur_sur_un_vrai_compte() {
     post_json(
         router(state.clone()),
         "/register",
-        r#"{"email": "err.e2e@custhome.fr", "password": "motdepasse-e2e"}"#,
+        r#"{"name": "Err", "email": "err.e2e@custhome.fr", "password": "motdepasse-e2e"}"#,
         &[],
     )
     .await;
+    activate_user(&db, "err.e2e@custhome.fr").await;
     let token = login_token_with(&state, "err.e2e@custhome.fr", "motdepasse-e2e").await;
 
     // Header manquant.
@@ -219,7 +224,6 @@ async fn cascade_des_cas_d_erreur_sur_un_vrai_compte() {
         let claims = serde_json::json!({
             "sub": "000000000000000000000000",
             "roles": {"portail_a": "user"},
-            "super_admin": false,
             "iat": now - 3600,
             "exp": now - 600,
         });
@@ -241,8 +245,9 @@ async fn cascade_des_cas_d_erreur_sur_un_vrai_compte() {
     .await;
     assert_eq!(token_expire.status, StatusCode::UNAUTHORIZED);
 
-    // Portail sans rôle.
-    let sans_role = get(
+    // Rôles globaux : l'utilisateur a un rôle, donc /validate accorde l'accès
+    // même sur un portail arbitraire (le contrôle fin est fait par l'endpoint).
+    let avec_role = get(
         router(state),
         "/validate",
         &[
@@ -251,7 +256,7 @@ async fn cascade_des_cas_d_erreur_sur_un_vrai_compte() {
         ],
     )
     .await;
-    assert_eq!(sans_role.status, StatusCode::FORBIDDEN);
+    assert_eq!(avec_role.status, StatusCode::OK);
 
     db.drop().await.unwrap();
 }
@@ -266,10 +271,11 @@ async fn compte_neuf_sans_roles_refuse_sur_tous_les_portails() {
     post_json(
         router(state.clone()),
         "/register",
-        r#"{"email": "neuf@custhome.fr", "password": "motdepasse-e2e"}"#,
+        r#"{"name": "Neuf", "email": "neuf@custhome.fr", "password": "motdepasse-e2e"}"#,
         &[],
     )
     .await;
+    activate_user(&db, "neuf@custhome.fr").await;
     let token = login_token_with(&state, "neuf@custhome.fr", "motdepasse-e2e").await;
 
     for portal in ["portail_a", "portail_b"] {

@@ -48,8 +48,7 @@ async fn get_me_renvoie_le_profil_sans_hash() {
     assert_eq!(response.status, StatusCode::OK);
     assert_eq!(response.body["user_id"], user.id.unwrap().to_hex());
     assert_eq!(response.body["email"], "martin@test.fr");
-    assert_eq!(response.body["roles"]["portail_a"], "admin");
-    assert_eq!(response.body["is_super_admin"], false);
+    assert_eq!(response.body["roles"][0], "admin");
     assert_eq!(response.body["whitelist_only"], false);
     assert!(response.body["created_at"].is_string());
     // Jamais de données sensibles dans le profil.
