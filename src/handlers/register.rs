@@ -12,10 +12,8 @@ use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use serde::Deserialize;
 use serde_json::json;
+use crate::validation::{self, PASSWORD_MIN_CHARS};
 use validator::Validate;
-
-/// Taille minimale du mot de passe.
-const MIN_PASSWORD_CHARS: u64 = 8;
 
 // Pas de derive Debug : le mot de passe ne doit jamais fuiter dans les logs.
 #[derive(Deserialize, Validate)]
@@ -23,7 +21,7 @@ pub struct RegisterRequest {
     #[validate(email(message = "format d'email invalide"))]
     pub email: String,
     #[validate(length(
-        min = "MIN_PASSWORD_CHARS",
+        min = "PASSWORD_MIN_CHARS",
         message = "mot de passe trop court (minimum 8 caractÃ¨res)"
     ))]
     pub password: String,
@@ -40,9 +38,7 @@ pub async fn register(
     // JSON absent/malformÃ©/champs manquants â†’ 400 (et non 422, contrat US-02).
     let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
 
-    request
-        .validate()
-        .map_err(|e| AppError::Validation(format_validation_errors(&e)))?;
+    validation::check(&request)?;
 
     let password_hash = password::hash(&request.password).map_err(|_| AppError::Internal)?;
     let user = User::new(
@@ -59,14 +55,4 @@ pub async fn register(
             Err(AppError::Internal)
         }
     }
-}
-
-fn format_validation_errors(errors: &validator::ValidationErrors) -> String {
-    errors
-        .field_errors()
-        .values()
-        .flat_map(|field_errors| field_errors.iter())
-        .map(|e| e.message.as_deref().unwrap_or("champ invalide").to_string())
-        .collect::<Vec<_>>()
-        .join(" ; ")
 }

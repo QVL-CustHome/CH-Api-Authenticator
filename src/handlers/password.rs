@@ -5,6 +5,7 @@ use crate::error::AppError;
 use crate::middleware::auth::AuthUser;
 use crate::services::{password, secure_token};
 use crate::state::AppState;
+use crate::validation::{self, PASSWORD_MIN_CHARS};
 use axum::Json;
 use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
@@ -14,26 +15,34 @@ use mongodb::bson::oid::ObjectId;
 use serde::Deserialize;
 use serde_json::json;
 use std::time::Duration;
+use validator::Validate;
 
-/// Taille minimale du mot de passe (cohérent avec /register).
-const MIN_PASSWORD_CHARS: usize = 8;
-
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct ForgotRequest {
+    #[validate(email(message = "format d'email invalide"))]
     pub email: String,
 }
 
 // Pas de derive Debug : le mot de passe ne doit jamais fuiter dans les logs.
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct ResetRequest {
+    #[validate(length(min = 1, message = "token requis"))]
     pub token: String,
+    #[validate(length(
+        min = "PASSWORD_MIN_CHARS",
+        message = "mot de passe trop court (minimum 8 caractères)"
+    ))]
     pub new_password: String,
 }
 
 // Pas de derive Debug : les mots de passe ne doivent jamais fuiter dans les logs.
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct ChangePasswordRequest {
     pub current_password: String,
+    #[validate(length(
+        min = "PASSWORD_MIN_CHARS",
+        message = "mot de passe trop court (minimum 8 caractères)"
+    ))]
     pub new_password: String,
 }
 
@@ -45,12 +54,7 @@ pub async fn change(
     payload: Result<Json<ChangePasswordRequest>, JsonRejection>,
 ) -> Result<impl IntoResponse, AppError> {
     let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
-
-    if request.new_password.chars().count() < MIN_PASSWORD_CHARS {
-        return Err(AppError::Validation(
-            "mot de passe trop court (minimum 8 caractères)".to_string(),
-        ));
-    }
+    validation::check(&request)?;
 
     let user_id = ObjectId::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
     let user = state
@@ -100,6 +104,7 @@ pub async fn forgot(
     payload: Result<Json<ForgotRequest>, JsonRejection>,
 ) -> Result<impl IntoResponse, AppError> {
     let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
+    validation::check(&request)?;
 
     if let Some(user) = state
         .users
@@ -163,11 +168,7 @@ pub async fn reset(
 
     // Validé AVANT de consommer : un mot de passe trop court ne doit pas
     // brûler le token (l'utilisateur peut réessayer avec le même lien).
-    if request.new_password.chars().count() < MIN_PASSWORD_CHARS {
-        return Err(AppError::Validation(
-            "mot de passe trop court (minimum 8 caractères)".to_string(),
-        ));
-    }
+    validation::check(&request)?;
 
     let consumed = state
         .reset_tokens
