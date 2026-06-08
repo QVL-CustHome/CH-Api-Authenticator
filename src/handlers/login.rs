@@ -5,6 +5,7 @@ use crate::error::AppError;
 use crate::handlers::session::{Session, create_session};
 use crate::services::{password, whitelist};
 use crate::state::AppState;
+use crate::validation;
 use axum::Json;
 use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
@@ -12,14 +13,17 @@ use axum::http::HeaderMap;
 use serde::Deserialize;
 use std::net::IpAddr;
 use std::sync::LazyLock;
+use validator::Validate;
 
 /// IP client réelle, transmise par la Gateway (logique trusted_proxies, US-10 côté Gateway).
 pub const CLIENT_IP_HEADER: &str = "x-client-ip";
 
 // Pas de derive Debug : le mot de passe ne doit jamais fuiter dans les logs.
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct LoginRequest {
+    #[validate(email(message = "format d'email invalide"))]
     pub email: String,
+    #[validate(length(min = 1, message = "mot de passe requis"))]
     pub password: String,
 }
 
@@ -38,6 +42,7 @@ pub async fn login(
     payload: Result<Json<LoginRequest>, JsonRejection>,
 ) -> Result<Session, AppError> {
     let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
+    validation::check(&request)?;
 
     let user = state
         .users
