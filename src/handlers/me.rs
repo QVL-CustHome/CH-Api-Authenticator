@@ -1,6 +1,6 @@
 //! Profil de l'utilisateur connecté (US-14).
 
-use crate::domain::user::User;
+use crate::domain::user::{AccountStatus, User};
 use crate::error::AppError;
 use crate::middleware::auth::AuthUser;
 use crate::repository::users::RepositoryError;
@@ -10,16 +10,17 @@ use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use validator::Validate;
 
 /// Profil exposé — jamais le `password_hash`.
 #[derive(Serialize)]
 pub struct MeResponse {
     pub user_id: String,
+    pub name: String,
     pub email: String,
-    pub roles: HashMap<String, String>,
-    pub is_super_admin: bool,
+    pub roles: Vec<String>,
+    /// État du compte (US-8.1) : `active` / `pending_validation` / `disabled`.
+    pub status: AccountStatus,
     pub whitelist_only: bool,
     pub created_at: String,
 }
@@ -92,9 +93,10 @@ fn parse_user_id(sub: &str) -> Result<ObjectId, AppError> {
 pub fn profile(user: User) -> MeResponse {
     MeResponse {
         user_id: user.id.map(|id| id.to_hex()).unwrap_or_default(),
+        name: user.name,
         email: user.email,
         roles: user.roles,
-        is_super_admin: user.is_super_admin,
+        status: user.status,
         whitelist_only: user.whitelist_only,
         created_at: user.created_at.try_to_rfc3339_string().unwrap_or_default(),
     }

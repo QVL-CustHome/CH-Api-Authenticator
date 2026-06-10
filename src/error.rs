@@ -24,6 +24,12 @@ pub enum AppError {
     /// Ressource inexistante (US-20).
     #[error("{0}")]
     NotFound(&'static str),
+    /// Identifiants valides mais compte en attente de validation (US-8.1).
+    #[error("compte en attente de validation par un administrateur")]
+    AccountPending,
+    /// Identifiants valides mais compte désactivé par un administrateur (US-8.1).
+    #[error("compte désactivé")]
+    AccountDisabled,
     #[error("erreur interne")]
     Internal,
 }
@@ -37,6 +43,8 @@ impl IntoResponse for AppError {
             AppError::Forbidden(_) => (StatusCode::FORBIDDEN, "forbidden"),
             AppError::Conflict(_) => (StatusCode::CONFLICT, "conflict"),
             AppError::NotFound(_) => (StatusCode::NOT_FOUND, "not_found"),
+            AppError::AccountPending => (StatusCode::FORBIDDEN, "account_pending"),
+            AppError::AccountDisabled => (StatusCode::FORBIDDEN, "account_disabled"),
             AppError::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
         };
         let body = json!({ "error": error, "message": self.to_string() });

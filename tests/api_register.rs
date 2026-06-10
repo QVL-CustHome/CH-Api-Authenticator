@@ -15,7 +15,7 @@ async fn inscription_valide_201_avec_hash_et_roles_par_defaut() {
     let response = post_json(
         router(state.clone()),
         "/register",
-        r#"{"email": "Nouveau@Test.FR", "password": "motdepasse"}"#,
+        r#"{"name": "Nouveau", "email": "Nouveau@Test.FR", "password": "motdepasse"}"#,
         &[],
     )
     .await;
@@ -31,11 +31,8 @@ async fn inscription_valide_201_avec_hash_et_roles_par_defaut() {
         .unwrap()
         .expect("utilisateur en base");
     assert!(stored.password_hash.starts_with("$argon2id$"));
-    assert_eq!(
-        stored.roles.get("portail_test").map(String::as_str),
-        Some("user")
-    );
-    assert!(!stored.is_super_admin);
+    assert_eq!(stored.roles, vec!["user".to_string()]);
+    assert_eq!(stored.name, "Nouveau");
 
     db.drop().await.unwrap();
 }
@@ -49,7 +46,7 @@ async fn roles_du_body_ignores() {
     let response = post_json(
         router(state.clone()),
         "/register",
-        r#"{"email": "pirate@test.fr", "password": "motdepasse", "roles": {"portail": "admin"}, "is_super_admin": true}"#,
+        r#"{"name": "Pirate", "email": "pirate@test.fr", "password": "motdepasse", "roles": {"portail": "admin"}, "is_super_admin": true}"#,
         &[],
     )
     .await;
@@ -62,7 +59,6 @@ async fn roles_du_body_ignores() {
         .unwrap()
         .unwrap();
     assert!(stored.roles.is_empty());
-    assert!(!stored.is_super_admin);
 
     db.drop().await.unwrap();
 }
@@ -76,7 +72,7 @@ async fn email_deja_utilise_409() {
     let response = post_json(
         router(state),
         "/register",
-        r#"{"email": "Double@Test.FR", "password": "motdepasse"}"#,
+        r#"{"name": "Double", "email": "Double@Test.FR", "password": "motdepasse"}"#,
         &[],
     )
     .await;
@@ -93,15 +89,45 @@ async fn payloads_invalides_400() {
     let state = test_state(&db).await;
 
     for body in [
-        r#"{"email": "pas-un-email", "password": "motdepasse"}"#, // email invalide
-        r#"{"email": "ok@test.fr", "password": "court"}"#,        // mdp < 8
-        r#"{"email": "ok@test.fr"}"#,                             // champ manquant
-        "pas du json",                                            // JSON malformé
+        r#"{"name": "X", "email": "pas-un-email", "password": "motdepasse"}"#, // email invalide
+        r#"{"name": "X", "email": "ok@test.fr", "password": "court"}"#,        // mdp < 8
+        r#"{"name": "X", "email": "ok@test.fr"}"#,                             // mdp manquant
+        r#"{"email": "ok@test.fr", "password": "motdepasse"}"#,                // nom manquant
+        r#"{"name": "  ", "email": "ok2@test.fr", "password": "motdepasse"}"#, // nom vide
+        "pas du json",                                                         // JSON malformé
     ] {
         let response = post_json(router(state.clone()), "/register", body, &[]).await;
         assert_eq!(response.status, StatusCode::BAD_REQUEST, "payload : {body}");
         assert_eq!(response.body["error"], "bad_request");
     }
+
+    db.drop().await.unwrap();
+}
+
+#[tokio::test]
+async fn inscription_cree_un_compte_en_attente_de_validation() {
+    use ch_api_authenticator::domain::user::AccountStatus;
+
+    let db = test_db().await;
+    let state = test_state(&db).await;
+
+    let response = post_json(
+        router(state.clone()),
+        "/register",
+        r#"{"name": "Attente", "email": "attente@test.fr", "password": "motdepasse"}"#,
+        &[],
+    )
+    .await;
+    assert_eq!(response.status, StatusCode::CREATED);
+
+    // US-8.1 : le compte est créé « en attente de validation », pas actif.
+    let stored = state
+        .users
+        .find_by_email("attente@test.fr")
+        .await
+        .unwrap()
+        .expect("utilisateur en base");
+    assert_eq!(stored.status, AccountStatus::PendingValidation);
 
     db.drop().await.unwrap();
 }

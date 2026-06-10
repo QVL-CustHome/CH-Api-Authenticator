@@ -52,7 +52,7 @@ async fn validate_pleinement_fonctionnel_quand_mongo_down() {
     let mut user = User::new(
         "stateless@test.fr",
         "$argon2id$hash".to_string(),
-        HashMap::from([("portail_a".to_string(), "admin".to_string())]),
+        vec!["admin".to_string()],
     );
     user.id = Some(ObjectId::new());
     let token = state.jwt.issue(&user, None).unwrap();

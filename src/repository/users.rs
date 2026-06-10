@@ -1,6 +1,6 @@
 //! Accès à la collection `users` (US-01).
 
-use crate::domain::user::User;
+use crate::domain::user::{AccountStatus, User};
 use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
 use mongodb::options::IndexOptions;
@@ -60,18 +60,25 @@ impl UserRepository {
         self.collection.find_one(doc! { "_id": id }).await
     }
 
-    /// Liste paginée (US-20), triée par date de création, avec filtre
-    /// optionnel par email exact (normalisé). Rend aussi le total.
+    /// Liste paginée (US-20), triée par date de création, avec filtres
+    /// optionnels par email exact (normalisé) et par état (US-8.2). Rend le total.
     pub async fn list(
         &self,
         skip: u64,
         limit: i64,
         email: Option<&str>,
+        status: Option<AccountStatus>,
     ) -> Result<(Vec<User>, u64), mongodb::error::Error> {
-        let filter = match email {
-            Some(email) => doc! { "email": email.trim().to_lowercase() },
-            None => doc! {},
-        };
+        let mut filter = mongodb::bson::Document::new();
+        if let Some(email) = email {
+            filter.insert("email", email.trim().to_lowercase());
+        }
+        if let Some(status) = status {
+            filter.insert(
+                "status",
+                mongodb::bson::to_bson(&status).expect("statut sérialisable"),
+            );
+        }
         let total = self.collection.count_documents(filter.clone()).await?;
         let mut cursor = self
             .collection
@@ -91,7 +98,7 @@ impl UserRepository {
     pub async fn update_roles(
         &self,
         id: ObjectId,
-        roles: &std::collections::HashMap<String, String>,
+        roles: &[String],
     ) -> Result<bool, mongodb::error::Error> {
         let roles_bson = mongodb::bson::to_bson(roles).expect("map de chaînes sérialisable");
         let update = doc! { "$set": {
@@ -154,6 +161,47 @@ impl UserRepository {
             Err(e) => Err(RepositoryError::Database(e)),
         }
     }
+
+    /// Change le nom affiché (US-8.x). `Ok(false)` si l'id est inconnu.
+    pub async fn update_name(
+        &self,
+        id: ObjectId,
+        name: &str,
+    ) -> Result<bool, mongodb::error::Error> {
+        let update = doc! { "$set": {
+            "name": name,
+            "updated_at": mongodb::bson::DateTime::now(),
+        } };
+        let result = self
+            .collection
+            .update_one(doc! { "_id": id }, update)
+            .await?;
+        Ok(result.matched_count == 1)
+    }
+
+    /// Change l'état du compte (activation / désactivation / mise en attente, US-8.2).
+    /// `Ok(false)` si l'id est inconnu.
+    pub async fn update_status(
+        &self,
+        id: ObjectId,
+        status: AccountStatus,
+    ) -> Result<bool, mongodb::error::Error> {
+        let update = doc! { "$set": {
+            "status": mongodb::bson::to_bson(&status).expect("statut sérialisable"),
+            "updated_at": mongodb::bson::DateTime::now(),
+        } };
+        let result = self
+            .collection
+            .update_one(doc! { "_id": id }, update)
+            .await?;
+        Ok(result.matched_count == 1)
+    }
+
+    /// Supprime définitivement un compte (US-8.2). `Ok(false)` si l'id est inconnu.
+    pub async fn delete(&self, id: ObjectId) -> Result<bool, mongodb::error::Error> {
+        let result = self.collection.delete_one(doc! { "_id": id }).await?;
+        Ok(result.deleted_count == 1)
+    }
 }
 
 fn is_duplicate_key(e: &mongodb::error::Error) -> bool {
@@ -168,7 +216,6 @@ fn is_duplicate_key(e: &mongodb::error::Error) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
 
     /// Ces tests utilisent l'instance MongoDB locale (service Windows),
     /// chacun dans une base jetable supprimée en fin de test.
@@ -180,7 +227,7 @@ mod tests {
     }
 
     fn user(email: &str) -> User {
-        User::new(email, "$argon2id$test".to_string(), HashMap::new())
+        User::new(email, "$argon2id$test".to_string(), Vec::new())
     }
 
     #[tokio::test]

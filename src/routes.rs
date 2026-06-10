@@ -6,7 +6,7 @@ use crate::middleware::tracing::correlation_and_access_log;
 use crate::state::AppState;
 use axum::Router;
 use axum::middleware::from_fn;
-use axum::routing::{get, post, put};
+use axum::routing::{delete, get, post, put};
 
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -25,13 +25,31 @@ pub fn router(state: AppState) -> Router {
             "/me",
             get(handlers::me::get_me).put(handlers::me::update_me),
         )
-        // Administration — garde SuperAdmin (US-20).
+        // Administration — garde PortalAdmin (US-20 / US-8.2).
         .route("/users", get(handlers::admin::list_users))
+        .route("/users/pending", get(handlers::admin::list_pending))
+        .route(
+            "/users/{id}",
+            get(handlers::admin::get_user)
+                .put(handlers::admin::update_user)
+                .delete(handlers::admin::delete_user),
+        )
+        .route("/users/{id}/status", put(handlers::admin::update_status))
+        .route(
+            "/users/{id}/password",
+            put(handlers::admin::update_password),
+        )
         .route("/users/{id}/roles", put(handlers::admin::update_roles))
         .route(
             "/users/{id}/whitelist",
             put(handlers::admin::update_whitelist),
         )
+        // Catalogue des rôles — garde PortalAdmin (US-8.3).
+        .route(
+            "/roles",
+            get(handlers::roles::list_roles).post(handlers::roles::create_role),
+        )
+        .route("/roles/{id}", delete(handlers::roles::delete_role))
         // US-06 : correlation id + log d'accès sur toutes les routes.
         .layer(from_fn(correlation_and_access_log))
         .with_state(state)

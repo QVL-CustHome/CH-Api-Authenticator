@@ -1,5 +1,5 @@
 //! US-05 — Validation du token pour la Gateway : résolution du rôle par
-//! portail (X-Portal), super-admin partout, claim ip revérifié, 200/401/403.
+//! portail (X-Portal), claim ip revérifié, 200/401/403.
 
 mod common;
 
@@ -8,73 +8,18 @@ use ch_api_authenticator::handlers::login::CLIENT_IP_HEADER;
 use ch_api_authenticator::handlers::validate::PORTAL_HEADER;
 use ch_api_authenticator::routes::router;
 use common::*;
+use std::collections::HashMap;
 
 const WHITELIST_BODY: &str = r#"{"email": "secure@test.fr", "password": "bon-mot-de-passe"}"#;
 
 #[tokio::test]
-async fn token_valide_200_avec_role_du_portail() {
+async fn token_valide_200_role_global_quel_que_soit_le_portail() {
     let db = test_db().await;
     let state = test_state(&db).await;
-    let user = seed_user(
-        &state,
-        "martin@test.fr",
-        roles(&[("portail_a", "admin"), ("portail_b", "user")]),
-    )
-    .await;
+    let user = seed_user(&state, "martin@test.fr", roles(&[("portail_a", "admin")])).await;
     let token = login_token(&state, "martin@test.fr").await;
 
-    // Le rôle dépend du portail visé.
-    for (portal, expected_role) in [("portail_a", "admin"), ("portail_b", "user")] {
-        let response = get(
-            router(state.clone()),
-            "/validate",
-            &[
-                ("Authorization", &format!("Bearer {token}")),
-                (PORTAL_HEADER, portal),
-            ],
-        )
-        .await;
-
-        assert_eq!(response.status, StatusCode::OK);
-        // Contrat exact consommé par la Gateway Go (AuthResponse de auth.go).
-        assert_eq!(response.body["user_id"], user.id.unwrap().to_hex());
-        assert_eq!(response.body["role"], expected_role);
-    }
-
-    db.drop().await.unwrap();
-}
-
-#[tokio::test]
-async fn aucun_role_sur_le_portail_403() {
-    let db = test_db().await;
-    let state = test_state(&db).await;
-    seed_user(&state, "martin@test.fr", roles(&[("portail_a", "user")])).await;
-    let token = login_token(&state, "martin@test.fr").await;
-
-    let response = get(
-        router(state),
-        "/validate",
-        &[
-            ("Authorization", &format!("Bearer {token}")),
-            (PORTAL_HEADER, "portail_inconnu"),
-        ],
-    )
-    .await;
-
-    assert_eq!(response.status, StatusCode::FORBIDDEN);
-    assert_eq!(response.body["error"], "forbidden");
-
-    db.drop().await.unwrap();
-}
-
-#[tokio::test]
-async fn super_admin_admin_sur_tous_les_portails() {
-    let db = test_db().await;
-    let state = test_state(&db).await;
-    seed_super_admin(&state, "root@test.fr").await;
-    let token = login_token(&state, "root@test.fr").await;
-
-    // Aucun rôle explicite, mais super-admin → admin partout.
+    // Rôles globaux : le rôle est résolu quel que soit le portail visé.
     for portal in ["portail_a", "portail_b", "portail_futur"] {
         let response = get(
             router(state.clone()),
@@ -85,9 +30,35 @@ async fn super_admin_admin_sur_tous_les_portails() {
             ],
         )
         .await;
+
         assert_eq!(response.status, StatusCode::OK, "portail : {portal}");
+        // Contrat exact consommé par la Gateway Go (AuthResponse de auth.go).
+        assert_eq!(response.body["user_id"], user.id.unwrap().to_hex());
         assert_eq!(response.body["role"], "admin");
     }
+
+    db.drop().await.unwrap();
+}
+
+#[tokio::test]
+async fn aucun_role_403() {
+    let db = test_db().await;
+    let state = test_state(&db).await;
+    seed_user(&state, "martin@test.fr", HashMap::new()).await;
+    let token = login_token(&state, "martin@test.fr").await;
+
+    let response = get(
+        router(state),
+        "/validate",
+        &[
+            ("Authorization", &format!("Bearer {token}")),
+            (PORTAL_HEADER, "portail_a"),
+        ],
+    )
+    .await;
+
+    assert_eq!(response.status, StatusCode::FORBIDDEN);
+    assert_eq!(response.body["error"], "forbidden");
 
     db.drop().await.unwrap();
 }
@@ -152,7 +123,6 @@ async fn token_expire_401() {
         let claims = serde_json::json!({
             "sub": user.id.unwrap().to_hex(),
             "roles": {"portail_a": "user"},
-            "super_admin": false,
             "iat": now - 3600,
             "exp": now - 600,
         });

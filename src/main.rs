@@ -1,7 +1,10 @@
-use ch_api_authenticator::config::{self, Secrets};
+use ch_api_authenticator::config;
+use ch_api_authenticator::domain::role::Role;
 use ch_api_authenticator::domain::user::User;
+use ch_api_authenticator::middleware::auth::ADMIN_ROLE;
 use ch_api_authenticator::repository;
-use ch_api_authenticator::repository::users::{RepositoryError, UserRepository};
+use ch_api_authenticator::repository::roles::RoleError;
+use ch_api_authenticator::repository::users::RepositoryError;
 use ch_api_authenticator::routes;
 use ch_api_authenticator::services;
 use ch_api_authenticator::state::AppState;
@@ -47,6 +50,7 @@ async fn main() {
     // US-01/US-17/US-19 : index (email unique, TTL des tokens), idempotents.
     let indexes = async {
         state.users.ensure_indexes().await?;
+        state.roles.ensure_indexes().await?;
         state.reset_tokens.ensure_indexes().await?;
         state.refresh_tokens.ensure_indexes().await
     };
@@ -56,10 +60,10 @@ async fn main() {
         std::process::exit(1);
     }
 
-    // US-01 : seed du premier super-admin (créé uniquement s'il n'existe pas).
-    if let Err(e) = seed_super_admin(&state.users, &state.settings.secrets).await {
-        tracing::error!(error = %e, "Seed du super-admin en échec");
-        eprintln!("Démarrage impossible — seed du super-admin en échec : {e}");
+    // Seed d'un administrateur du portail (rôle admin sur portail_admin).
+    if let Err(e) = seed_admin(&state).await {
+        tracing::error!(error = %e, "Seed de l'administrateur en échec");
+        eprintln!("Démarrage impossible — seed de l'administrateur en échec : {e}");
         std::process::exit(1);
     }
 
@@ -82,39 +86,61 @@ async fn main() {
     }
 }
 
-/// Crée le premier super-admin depuis ADMIN_EMAIL / ADMIN_PASSWORD.
-/// Sans effet si les variables sont absentes ou si le compte existe déjà.
-async fn seed_super_admin(users: &UserRepository, secrets: &Secrets) -> Result<(), String> {
+/// Garantit qu'un administrateur du portail existe (ADMIN_EMAIL / ADMIN_PASSWORD).
+/// Crée le rôle `portail_admin`/`admin` au catalogue, puis crée l'admin avec ce
+/// rôle — ou le lui ajoute s'il existe déjà (migration des anciens super-admins).
+/// Sans effet si les variables d'environnement sont absentes.
+async fn seed_admin(state: &AppState) -> Result<(), String> {
+    let secrets = &state.settings.secrets;
     let (Some(email), Some(password)) = (&secrets.admin_email, &secrets.admin_password) else {
-        tracing::info!("Seed super-admin ignoré : ADMIN_EMAIL / ADMIN_PASSWORD absents");
+        tracing::info!("Seed admin ignoré : ADMIN_EMAIL / ADMIN_PASSWORD absents");
         return Ok(());
     };
 
-    if users
+    // Le rôle admin doit exister au catalogue (attribution validée, US-8.3).
+    let role = Role::new(ADMIN_ROLE);
+    match state.roles.insert(&role).await {
+        Ok(_) | Err(RoleError::Duplicate) => {}
+        Err(RoleError::Database(e)) => return Err(e.to_string()),
+    }
+
+    match state
+        .users
         .find_by_email(email)
         .await
         .map_err(|e| e.to_string())?
-        .is_some()
     {
-        tracing::info!("Super-admin déjà présent, seed ignoré");
-        return Ok(());
-    }
-
-    let password_hash = services::password::hash(password).map_err(|e| e.to_string())?;
-    match users
-        .insert(&User::new_super_admin(email, password_hash))
-        .await
-    {
-        Ok(id) => {
-            tracing::info!(user_id = %id, "Super-admin créé");
+        Some(existing) => {
+            if !existing.roles.iter().any(|r| r == ADMIN_ROLE) {
+                let mut roles = existing.roles.clone();
+                roles.push(ADMIN_ROLE.to_string());
+                state
+                    .users
+                    .update_roles(existing.id.expect("utilisateur persisté"), &roles)
+                    .await
+                    .map_err(|e| e.to_string())?;
+                tracing::info!("Rôle admin ajouté au compte administrateur existant");
+            } else {
+                tracing::info!("Administrateur déjà présent avec le rôle, seed ignoré");
+            }
             Ok(())
         }
-        // Démarrages concurrents : un autre process l'a créé entre-temps.
-        Err(RepositoryError::DuplicateEmail) => {
-            tracing::info!("Super-admin déjà présent, seed ignoré");
-            Ok(())
+        None => {
+            let password_hash = services::password::hash(password).map_err(|e| e.to_string())?;
+            let mut user = User::new(email, password_hash, vec![ADMIN_ROLE.to_string()]);
+            user.name = "Administrateur".to_string();
+            match state.users.insert(&user).await {
+                Ok(id) => {
+                    tracing::info!(user_id = %id, "Administrateur créé");
+                    Ok(())
+                }
+                Err(RepositoryError::DuplicateEmail) => {
+                    tracing::info!("Administrateur déjà présent, seed ignoré");
+                    Ok(())
+                }
+                Err(e) => Err(e.to_string()),
+            }
         }
-        Err(e) => Err(e.to_string()),
     }
 }
 

@@ -167,7 +167,7 @@ async fn jamais_de_mot_de_passe_ni_token_dans_les_logs() {
         post_json(
             router(state.clone()),
             "/register",
-            r#"{"email": "log.leak@test.fr", "password": "Secret-En-Clair-123!"}"#,
+            r#"{"name": "Leak", "email": "log.leak@test.fr", "password": "Secret-En-Clair-123!"}"#,
             &[],
         )
         .await;

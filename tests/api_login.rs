@@ -7,6 +7,7 @@ use axum::http::StatusCode;
 use ch_api_authenticator::handlers::login::CLIENT_IP_HEADER;
 use ch_api_authenticator::routes::router;
 use common::*;
+use mongodb::bson::doc;
 use std::collections::HashMap;
 
 const LOGIN_BODY: &str = r#"{"email": "martin@test.fr", "password": "bon-mot-de-passe"}"#;
@@ -35,11 +36,7 @@ async fn login_valide_200_token_et_cookie() {
         .jwt
         .validate(response.body["access_token"].as_str().unwrap())
         .unwrap();
-    assert_eq!(
-        claims.roles.get("portail_a").map(String::as_str),
-        Some("admin")
-    );
-    assert!(!claims.super_admin);
+    assert_eq!(claims.roles, vec!["admin".to_string()]);
     assert_eq!(claims.ip, None);
 
     // Cookie HttpOnly posé, sans Secure (cookie_secure = false en test).
@@ -200,6 +197,95 @@ async fn payload_invalide_400() {
     let response = post_json(router(state), "/login", "pas du json", &[]).await;
     assert_eq!(response.status, StatusCode::BAD_REQUEST);
     assert_eq!(response.body["error"], "bad_request");
+
+    db.drop().await.unwrap();
+}
+
+/// US-8.1 — Un compte fraîchement inscrit (en attente de validation) ne peut
+/// pas se connecter, même avec le bon mot de passe : 403 `account_pending`.
+#[tokio::test]
+async fn login_compte_en_attente_refuse_403() {
+    let db = test_db().await;
+    let state = test_state(&db).await;
+
+    post_json(
+        router(state.clone()),
+        "/register",
+        r#"{"name": "Attente", "email": "attente@test.fr", "password": "bon-mot-de-passe"}"#,
+        &[],
+    )
+    .await;
+
+    let response = post_json(
+        router(state),
+        "/login",
+        r#"{"email": "attente@test.fr", "password": "bon-mot-de-passe"}"#,
+        &[],
+    )
+    .await;
+
+    assert_eq!(response.status, StatusCode::FORBIDDEN);
+    assert_eq!(response.body["error"], "account_pending");
+    assert_eq!(response.set_cookie, None);
+
+    db.drop().await.unwrap();
+}
+
+/// US-8.1 — Un compte désactivé est refusé au login : 403 `account_disabled`.
+#[tokio::test]
+async fn login_compte_desactive_refuse_403() {
+    let db = test_db().await;
+    let state = test_state(&db).await;
+    let user = seed_user(&state, "off@test.fr", HashMap::new()).await;
+
+    // Désactivation directe (endpoint admin = US-8.2).
+    db.collection::<mongodb::bson::Document>("users")
+        .update_one(
+            doc! { "_id": user.id.unwrap() },
+            doc! { "$set": { "status": "disabled" } },
+        )
+        .await
+        .unwrap();
+
+    let response = post_json(
+        router(state),
+        "/login",
+        r#"{"email": "off@test.fr", "password": "bon-mot-de-passe"}"#,
+        &[],
+    )
+    .await;
+
+    assert_eq!(response.status, StatusCode::FORBIDDEN);
+    assert_eq!(response.body["error"], "account_disabled");
+
+    db.drop().await.unwrap();
+}
+
+/// US-8.1 — Après validation par un admin, la connexion est autorisée (200).
+#[tokio::test]
+async fn login_apres_validation_200() {
+    let db = test_db().await;
+    let state = test_state(&db).await;
+
+    post_json(
+        router(state.clone()),
+        "/register",
+        r#"{"name": "Valide", "email": "valide@test.fr", "password": "bon-mot-de-passe"}"#,
+        &[],
+    )
+    .await;
+    activate_user(&db, "valide@test.fr").await;
+
+    let response = post_json(
+        router(state),
+        "/login",
+        r#"{"email": "valide@test.fr", "password": "bon-mot-de-passe"}"#,
+        &[],
+    )
+    .await;
+
+    assert_eq!(response.status, StatusCode::OK);
+    assert!(response.body["access_token"].is_string());
 
     db.drop().await.unwrap();
 }

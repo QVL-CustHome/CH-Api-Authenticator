@@ -1,6 +1,7 @@
 //! Connexion : vérification des identifiants et émission de la session
 //! (access token JWT + refresh token, US-03/US-19).
 
+use crate::domain::user::AccountStatus;
 use crate::error::AppError;
 use crate::handlers::session::{Session, create_session};
 use crate::services::{password, whitelist};
@@ -61,6 +62,15 @@ pub async fn login(
 
     if !password::verify(&request.password, &user.password_hash) {
         return Err(AppError::Unauthorized);
+    }
+
+    // US-8.1 : seul un compte actif peut ouvrir une session. Contrôlé APRÈS le
+    // mot de passe : on ne révèle l'état du compte (en attente / désactivé)
+    // qu'au détenteur des bons identifiants.
+    match user.status {
+        AccountStatus::Active => {}
+        AccountStatus::PendingValidation => return Err(AppError::AccountPending),
+        AccountStatus::Disabled => return Err(AppError::AccountDisabled),
     }
 
     // US-04 : compte restreint par whitelist — IP requise et autorisée, sinon 401
