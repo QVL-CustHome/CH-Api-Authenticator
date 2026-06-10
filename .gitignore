@@ -1,4 +1,9 @@
 /target
+
+# Env (secrets — jamais commités)
 .env
+.env.*
+!.env.example
+
 .claude/settings.local.json
 .jira/
