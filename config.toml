@@ -4,7 +4,7 @@
 
 [server]
 # Port attendu par la Gateway (auth_service_url dans son config.yaml).
-port = 8081
+port = 8181
 # Verbosité des logs : DEBUG, INFO, WARN, ERROR (cohérent avec la Gateway).
 log_level = "INFO"
 
@@ -32,6 +32,6 @@ from = "CustHome <no-reply@custhome.local>"
 
 [password_reset]
 # Page du front d'auth qui consommera le token : {url}?token=...
-url = "http://localhost:3000/reset-password"
+url = "http://localhost:3200/reset-password"
 # Durée de vie du token one-time (minutes) — purge automatique (index TTL Mongo).
-ttl_minutes = 30
+ttl_minutes = 15

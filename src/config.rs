@@ -172,10 +172,17 @@ pub struct Settings {
 }
 
 pub fn load(path: &str) -> Result<Settings, ConfigError> {
-    let config: Config = Figment::new()
+    let mut config: Config = Figment::new()
         .merge(Toml::file(path))
         .merge(Env::prefixed("CH__").split("__"))
         .extract()?;
+
+    if let Some(port_str) = optional("PORT") {
+        if let Ok(port) = port_str.parse::<u16>() {
+            config.server.port = port;
+        }
+    }
+
     let secrets = load_secrets()?;
     validate_secrets(&secrets)?;
     validate_email(&config.email, &secrets)?;
