@@ -22,6 +22,8 @@ pub struct MeResponse {
     /// État du compte (US-8.1) : `active` / `pending_validation` / `disabled`.
     pub status: AccountStatus,
     pub whitelist_only: bool,
+    /// IP/CIDR autorisés (auto-appris au login ou gérés par un admin).
+    pub allowed_ips: Vec<String>,
     pub created_at: String,
 }
 
@@ -98,6 +100,7 @@ pub fn profile(user: User) -> MeResponse {
         roles: user.roles,
         status: user.status,
         whitelist_only: user.whitelist_only,
+        allowed_ips: user.allowed_ips,
         created_at: user.created_at.try_to_rfc3339_string().unwrap_or_default(),
     }
 }

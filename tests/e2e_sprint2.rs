@@ -311,9 +311,10 @@ async fn whitelist_administree_de_bout_en_bout() {
 
     let login_body = r#"{"email": "fixe@custhome.fr", "password": "mdp-poste-fixe!"}"#;
 
-    // Login refusé hors whitelist, accepté depuis l'IP autorisée.
+    // Login refusé hors whitelist (403 dédié), accepté depuis l'IP autorisée.
     let hors = post_json(router(state.clone()), "/login", login_body, &[]).await;
-    assert_eq!(hors.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(hors.status, StatusCode::FORBIDDEN);
+    assert_eq!(hors.body["error"], "device_not_allowed");
     let login = post_json(
         router(state.clone()),
         "/login",

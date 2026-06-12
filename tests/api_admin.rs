@@ -262,10 +262,11 @@ async fn whitelist_activee_par_l_admin_s_applique_au_login() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["whitelist_only"], true);
 
-    // Sans IP transmise → refusé ; depuis une IP autorisée → accepté.
+    // Sans IP transmise → refusé (403 dédié) ; depuis une IP autorisée → accepté.
     let login_body = r#"{"email": "martin@test.fr", "password": "bon-mot-de-passe"}"#;
     let sans_ip = post_json(router(state.clone()), "/login", login_body, &[]).await;
-    assert_eq!(sans_ip.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(sans_ip.status, StatusCode::FORBIDDEN);
+    assert_eq!(sans_ip.body["error"], "device_not_allowed");
 
     let bonne_ip = post_json(
         router(state),
