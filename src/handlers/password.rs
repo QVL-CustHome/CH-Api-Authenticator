@@ -1,6 +1,3 @@
-//! Gestion du mot de passe : changement authentifié (US-15),
-//! réinitialisation par email — demande (US-17) et consommation (US-18).
-
 use crate::error::AppError;
 use crate::middleware::auth::AuthUser;
 use crate::services::{password, secure_token};
@@ -23,7 +20,6 @@ pub struct ForgotRequest {
     pub email: String,
 }
 
-// Pas de derive Debug : le mot de passe ne doit jamais fuiter dans les logs.
 #[derive(Deserialize, Validate)]
 pub struct ResetRequest {
     #[validate(length(min = 1, message = "token requis"))]
@@ -35,7 +31,6 @@ pub struct ResetRequest {
     pub new_password: String,
 }
 
-// Pas de derive Debug : les mots de passe ne doivent jamais fuiter dans les logs.
 #[derive(Deserialize, Validate)]
 pub struct ChangePasswordRequest {
     pub current_password: String,
@@ -46,8 +41,6 @@ pub struct ChangePasswordRequest {
     pub new_password: String,
 }
 
-/// `PUT /password` (authentifié, US-15) → change le mot de passe en prouvant
-/// que l'ancien est connu. `401` générique si l'ancien est faux.
 pub async fn change(
     State(state): State<AppState>,
     AuthUser(claims): AuthUser,
@@ -84,7 +77,6 @@ pub async fn change(
         return Err(AppError::InvalidToken);
     }
 
-    // US-19 : toutes les sessions longues tombent avec l'ancien mot de passe.
     if let Err(e) = state.refresh_tokens.revoke_all_for_user(user_id).await {
         tracing::error!(error = %e, "Révocation des refresh tokens en échec");
     }
@@ -96,9 +88,6 @@ pub async fn change(
     ))
 }
 
-/// `POST /password/forgot` → TOUJOURS `202` (anti-énumération) : la réponse
-/// est identique que l'email existe ou non. Si le compte existe, un token
-/// one-time est enregistré (hashé) et le lien part par email.
 pub async fn forgot(
     State(state): State<AppState>,
     payload: Result<Json<ForgotRequest>, JsonRejection>,
@@ -128,8 +117,6 @@ pub async fn forgot(
                 AppError::Internal
             })?;
 
-        // Envoi détaché : la latence SMTP ne doit ni retarder le 202
-        // ni révéler par le timing que le compte existe.
         let link = format!("{}?token={token}", state.settings.config.password_reset.url);
         let mailer = state.mailer.clone();
         let to = user.email.clone();
@@ -157,17 +144,12 @@ pub async fn forgot(
     ))
 }
 
-/// `POST /password/reset` → consomme le token one-time et pose le nouveau
-/// mot de passe. `400` strictement générique pour un token inconnu, expiré
-/// ou déjà utilisé — sans distinguer la cause (US-18).
 pub async fn reset(
     State(state): State<AppState>,
     payload: Result<Json<ResetRequest>, JsonRejection>,
 ) -> Result<impl IntoResponse, AppError> {
     let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
 
-    // Validé AVANT de consommer : un mot de passe trop court ne doit pas
-    // brûler le token (l'utilisateur peut réessayer avec le même lien).
     validation::check(&request)?;
 
     let consumed = state
@@ -191,11 +173,10 @@ pub async fn reset(
         })?;
 
     if !updated {
-        // Compte supprimé entre-temps : même réponse générique que token invalide.
+
         return Err(AppError::Validation("token invalide ou expiré".to_string()));
     }
 
-    // US-19 : toutes les sessions longues tombent avec l'ancien mot de passe.
     if let Err(e) = state
         .refresh_tokens
         .revoke_all_for_user(consumed.user_id)

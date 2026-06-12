@@ -1,11 +1,7 @@
-//! Hash et vérification des mots de passe — Argon2id, sel aléatoire (US-01/US-02).
-
 use argon2::Argon2;
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 
-/// Hashe un mot de passe avec Argon2id (paramètres par défaut de la crate,
-/// conformes aux recommandations OWASP) et un sel aléatoire.
 pub fn hash(password: &str) -> Result<String, argon2::password_hash::Error> {
     let salt = SaltString::generate(&mut OsRng);
     Ok(Argon2::default()
@@ -13,9 +9,6 @@ pub fn hash(password: &str) -> Result<String, argon2::password_hash::Error> {
         .to_string())
 }
 
-/// Vérifie un mot de passe contre un hash stocké.
-/// Renvoie `false` pour un hash illisible plutôt que d'échouer (réponse 401 générique).
-// Consommé en US-03 (login).
 #[allow(dead_code)]
 pub fn verify(password: &str, stored_hash: &str) -> bool {
     PasswordHash::new(stored_hash)

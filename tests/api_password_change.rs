@@ -1,5 +1,3 @@
-//! US-15 — Changement de mot de passe authentifié (PUT /password).
-
 mod common;
 
 use axum::body::Body;
@@ -44,7 +42,6 @@ async fn changement_nominal_et_bascule_du_login() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
-    // Le nouveau mot de passe fonctionne, l'ancien est refusé.
     login_token_with(&state, "martin@test.fr", "nouveau-mdp-solide").await;
     let ancien = post_json(
         router(state.clone()),
@@ -55,7 +52,6 @@ async fn changement_nominal_et_bascule_du_login() {
     .await;
     assert_eq!(ancien.status, StatusCode::UNAUTHORIZED);
 
-    // Hash Argon2id tout neuf en base.
     let stored = state
         .users
         .find_by_email("martin@test.fr")
@@ -84,7 +80,6 @@ async fn ancien_mot_de_passe_faux_401_generique() {
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert_eq!(body["error"], "unauthorized");
 
-    // Le mot de passe n'a pas changé.
     login_token(&state, "martin@test.fr").await;
 
     db.drop().await.unwrap();
@@ -105,7 +100,7 @@ async fn nouveau_mot_de_passe_trop_court_400_sans_changement() {
     .await;
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
-    // L'ancien mot de passe fonctionne toujours.
+
     login_token(&state, "martin@test.fr").await;
 
     db.drop().await.unwrap();

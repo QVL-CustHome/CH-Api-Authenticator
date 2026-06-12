@@ -1,5 +1,3 @@
-//! Inscription d'un nouveau compte (US-02).
-
 use crate::domain::user::{AccountStatus, User};
 use crate::error::AppError;
 use crate::repository::users::RepositoryError;
@@ -15,7 +13,6 @@ use serde::Deserialize;
 use serde_json::json;
 use validator::Validate;
 
-// Pas de derive Debug : le mot de passe ne doit jamais fuiter dans les logs.
 #[derive(Deserialize, Validate)]
 pub struct RegisterRequest {
     #[validate(length(min = 1, message = "le nom est requis"))]
@@ -29,15 +26,11 @@ pub struct RegisterRequest {
     pub password: String,
 }
 
-/// `POST /register` â†’ `201 {user_id}` | `409` email dÃ©jÃ  utilisÃ© | `400` payload invalide.
-///
-/// Les rÃ´les ne sont JAMAIS acceptÃ©s depuis le body : ils proviennent de
-/// `registration.default_roles` (vide par dÃ©faut, attribution via super-admin au sprint 2).
 pub async fn register(
     State(state): State<AppState>,
     payload: Result<Json<RegisterRequest>, JsonRejection>,
 ) -> Result<impl IntoResponse, AppError> {
-    // JSON absent/malformÃ©/champs manquants â†’ 400 (et non 422, contrat US-02).
+
     let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
 
     validation::check(&request)?;
@@ -46,8 +39,7 @@ pub async fn register(
     }
 
     let password_hash = password::hash(&request.password).map_err(|_| AppError::Internal)?;
-    // US-8.1 : tout nouveau compte est créé « en attente de validation ». Un
-    // administrateur doit l'activer avant que la connexion soit possible.
+
     let mut user = User::new(
         &request.email,
         password_hash,

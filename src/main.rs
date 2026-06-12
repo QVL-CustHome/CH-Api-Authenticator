@@ -11,10 +11,9 @@ use ch_api_authenticator::state::AppState;
 
 #[tokio::main]
 async fn main() {
-    // Charge .env en développement (silencieux si absent).
+
     dotenvy::dotenv().ok();
 
-    // US-00 : échec au démarrage avec message explicite si la configuration est invalide.
     let settings = match config::load("config.toml") {
         Ok(s) => s,
         Err(e) => {
@@ -25,7 +24,6 @@ async fn main() {
 
     init_tracing(&settings.config.server.log_level);
 
-    // US-16 : mailer construit en fail-fast (mode smtp incomplet → erreur).
     let mailer = match ch_api_authenticator::services::mailer::Mailer::from_settings(&settings) {
         Ok(m) => m,
         Err(e) => {
@@ -35,7 +33,6 @@ async fn main() {
         }
     };
 
-    // US-01 : échec contrôlé et loggé si MongoDB est injoignable.
     let db = match repository::connect(&settings.secrets.mongo_uri).await {
         Ok(db) => db,
         Err(e) => {
@@ -47,7 +44,6 @@ async fn main() {
 
     let state = AppState::new(settings, db, mailer);
 
-    // US-01/US-17/US-19 : index (email unique, TTL des tokens), idempotents.
     let indexes = async {
         state.users.ensure_indexes().await?;
         state.roles.ensure_indexes().await?;
@@ -60,7 +56,6 @@ async fn main() {
         std::process::exit(1);
     }
 
-    // Seed d'un administrateur du portail (rôle admin sur portail_admin).
     if let Err(e) = seed_admin(&state).await {
         tracing::error!(error = %e, "Seed de l'administrateur en échec");
         eprintln!("Démarrage impossible — seed de l'administrateur en échec : {e}");
@@ -86,10 +81,6 @@ async fn main() {
     }
 }
 
-/// Garantit qu'un administrateur du portail existe (ADMIN_EMAIL / ADMIN_PASSWORD).
-/// Crée le rôle `portail_admin`/`admin` au catalogue, puis crée l'admin avec ce
-/// rôle — ou le lui ajoute s'il existe déjà (migration des anciens super-admins).
-/// Sans effet si les variables d'environnement sont absentes.
 async fn seed_admin(state: &AppState) -> Result<(), String> {
     let secrets = &state.settings.secrets;
     let (Some(email), Some(password)) = (&secrets.admin_email, &secrets.admin_password) else {
@@ -97,7 +88,6 @@ async fn seed_admin(state: &AppState) -> Result<(), String> {
         return Ok(());
     };
 
-    // Le rôle admin doit exister au catalogue (attribution validée, US-8.3).
     let role = Role::new(ADMIN_ROLE);
     match state.roles.insert(&role).await {
         Ok(_) | Err(RoleError::Duplicate) => {}
@@ -144,9 +134,6 @@ async fn seed_admin(state: &AppState) -> Result<(), String> {
     }
 }
 
-/// Initialise les logs JSON structurés (US-06), niveau configurable
-/// (DEBUG/INFO/WARN/ERROR — cohérent avec la Gateway). Le correlation id
-/// est porté par le span `requete` (voir `middleware::tracing`).
 fn init_tracing(level: &str) {
     let filter = tracing_subscriber::EnvFilter::try_new(level.to_lowercase())
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));

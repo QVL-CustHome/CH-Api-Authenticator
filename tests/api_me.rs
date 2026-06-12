@@ -1,5 +1,3 @@
-//! US-14 — Profil : GET /me et PUT /me (email), protégés par l'auth interne (US-13).
-
 mod common;
 
 use axum::body::Body;
@@ -51,7 +49,7 @@ async fn get_me_renvoie_le_profil_sans_hash() {
     assert_eq!(response.body["roles"][0], "admin");
     assert_eq!(response.body["whitelist_only"], false);
     assert!(response.body["created_at"].is_string());
-    // Jamais de données sensibles dans le profil.
+
     let raw = response.body.to_string();
     assert!(
         !raw.contains("password"),
@@ -109,7 +107,6 @@ async fn put_me_change_l_email_et_le_login_suit() {
         "email normalisé lowercase"
     );
 
-    // L'ancien email n'existe plus, le nouveau permet de se connecter.
     assert!(
         state
             .users

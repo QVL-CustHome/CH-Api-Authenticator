@@ -1,6 +1,3 @@
-//! US-05 — Validation du token pour la Gateway : résolution du rôle par
-//! portail (X-Portal), claim ip revérifié, 200/401/403.
-
 mod common;
 
 use axum::http::StatusCode;
@@ -19,7 +16,6 @@ async fn token_valide_200_role_global_quel_que_soit_le_portail() {
     let user = seed_user(&state, "martin@test.fr", roles(&[("portail_a", "admin")])).await;
     let token = login_token(&state, "martin@test.fr").await;
 
-    // Rôles globaux : le rôle est résolu quel que soit le portail visé.
     for portal in ["portail_a", "portail_b", "portail_futur"] {
         let response = get(
             router(state.clone()),
@@ -32,7 +28,7 @@ async fn token_valide_200_role_global_quel_que_soit_le_portail() {
         .await;
 
         assert_eq!(response.status, StatusCode::OK, "portail : {portal}");
-        // Contrat exact consommé par la Gateway Go (AuthResponse de auth.go).
+
         assert_eq!(response.body["user_id"], user.id.unwrap().to_hex());
         assert_eq!(response.body["role"], "admin");
     }
@@ -109,11 +105,6 @@ async fn token_expire_401() {
     let state = test_state(&db).await;
     let user = seed_user(&state, "martin@test.fr", roles(&[("portail_a", "user")])).await;
 
-    // Service jumeau avec TTL nul : le token émis est immédiatement expiré
-    // (la validation jsonwebtoken applique une tolérance par défaut de 60 s,
-    // donc on force un TTL "négatif" en forgeant les claims via un TTL 0 puis
-    // en attendant la fin de la fenêtre serait trop lent : on forge plutôt
-    // un token avec le même secret et une expiration passée).
     let expired = {
         use jsonwebtoken::{Algorithm, EncodingKey, Header};
         let now = std::time::SystemTime::now()
@@ -174,7 +165,6 @@ async fn token_whitelist_lie_a_l_ip_de_login() {
     let state = test_state(&db).await;
     seed_whitelist_user(&state, "secure@test.fr", &["10.1.2.3"]).await;
 
-    // Login depuis l'IP autorisée → token lié à 10.1.2.3.
     let login = post_json(
         router(state.clone()),
         "/login",
@@ -186,7 +176,6 @@ async fn token_whitelist_lie_a_l_ip_de_login() {
     let token = login.body["access_token"].as_str().unwrap().to_string();
     let auth = format!("Bearer {token}");
 
-    // Même IP → 200 ; IP différente ou absente → 401.
     let meme_ip = get(
         router(state.clone()),
         "/validate",
@@ -197,8 +186,7 @@ async fn token_whitelist_lie_a_l_ip_de_login() {
         ],
     )
     .await;
-    // 403 attendu : IP OK mais aucun rôle (utilisateur whitelist sans rôles) —
-    // prouve que le check IP passe AVANT la résolution du rôle.
+
     assert_eq!(meme_ip.status, StatusCode::FORBIDDEN);
 
     let autre_ip = get(
@@ -231,7 +219,6 @@ async fn user_normal_sans_claim_ip_valide_depuis_partout() {
     seed_user(&state, "martin@test.fr", roles(&[("portail_a", "user")])).await;
     let token = login_token(&state, "martin@test.fr").await;
 
-    // Pas de claim ip → le header X-Client-IP n'est pas exigé ni comparé.
     let response = get(
         router(state),
         "/validate",
@@ -247,8 +234,6 @@ async fn user_normal_sans_claim_ip_valide_depuis_partout() {
     db.drop().await.unwrap();
 }
 
-/// Reproduit le décodage strict du middleware Go de la Gateway (`auth.go`) :
-/// réponse 200 = JSON avec `user_id` non vide et `role`.
 #[tokio::test]
 async fn contrat_gateway_user_id_non_vide_et_role_present() {
     let db = test_db().await;
@@ -267,7 +252,7 @@ async fn contrat_gateway_user_id_non_vide_et_role_present() {
     .await;
 
     assert_eq!(response.status, StatusCode::OK);
-    // auth.go : Decode(&authData) puis rejet si authData.UserID == ""
+
     let user_id = response.body["user_id"].as_str().unwrap_or_default();
     assert!(!user_id.is_empty(), "la Gateway rejette un user_id vide");
     assert!(response.body["role"].is_string());

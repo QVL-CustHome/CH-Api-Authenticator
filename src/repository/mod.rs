@@ -1,5 +1,3 @@
-//! Accès MongoDB : connexion fail-fast et collections.
-
 pub mod refresh_tokens;
 pub mod reset_tokens;
 pub mod roles;
@@ -10,14 +8,10 @@ use mongodb::options::ClientOptions;
 use mongodb::{Client, Database};
 use std::time::Duration;
 
-/// Délai maximum pour joindre MongoDB au démarrage.
 const SERVER_SELECTION_TIMEOUT: Duration = Duration::from_secs(3);
 
-/// Base utilisée si l'URI ne précise pas de nom de base.
 const DEFAULT_DATABASE: &str = "custhome_auth";
 
-/// Ouvre la connexion et vérifie immédiatement la disponibilité (ping).
-/// Échoue en moins de [`SERVER_SELECTION_TIMEOUT`] si MongoDB est injoignable.
 pub async fn connect(uri: &str) -> Result<Database, mongodb::error::Error> {
     let mut options = ClientOptions::parse(uri).await?;
     options.server_selection_timeout = Some(SERVER_SELECTION_TIMEOUT);

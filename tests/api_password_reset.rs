@@ -1,6 +1,3 @@
-//! US-17 — Demande de réinitialisation : 202 anti-énumération, token hashé
-//! en base, email envoyé avec le lien, une seule demande valable à la fois.
-
 mod common;
 
 use axum::http::StatusCode;
@@ -10,7 +7,6 @@ use common::*;
 use std::collections::HashMap;
 use std::time::Duration;
 
-/// Attend que l'envoi détaché (tokio::spawn) ait rempli la boîte mémoire.
 async fn wait_for_email(
     outbox: &std::sync::Arc<
         std::sync::Mutex<Vec<ch_api_authenticator::services::mailer::SentEmail>>,
@@ -46,7 +42,6 @@ async fn reponse_202_identique_email_connu_ou_inconnu() {
     )
     .await;
 
-    // Anti-énumération : strictement la même réponse.
     assert_eq!(connu.status, StatusCode::ACCEPTED);
     assert_eq!(inconnu.status, StatusCode::ACCEPTED);
     assert_eq!(connu.body, inconnu.body);
@@ -69,7 +64,6 @@ async fn email_envoye_avec_le_lien_et_token_hashe_en_base() {
     .await;
     assert_eq!(response.status, StatusCode::ACCEPTED);
 
-    // L'email part vers le bon destinataire avec le lien configuré.
     let email = wait_for_email(&outbox).await;
     assert_eq!(email.to, "martin@test.fr");
     assert!(
@@ -80,7 +74,6 @@ async fn email_envoye_avec_le_lien_et_token_hashe_en_base() {
         email.body
     );
 
-    // Le token du lien n'est JAMAIS stocké en clair : seul son SHA-256 l'est.
     let token = email
         .body
         .split("token=")
@@ -101,7 +94,6 @@ async fn email_envoye_avec_le_lien_et_token_hashe_en_base() {
     assert_eq!(stored.user_id, user.id.unwrap());
     assert!(!stored.used, "le token capturé était encore vierge");
 
-    // Et le token en clair n'est pas retrouvable directement.
     assert!(
         state.reset_tokens.consume(&token).await.unwrap().is_none(),
         "le token en clair ne doit pas exister en base"
@@ -127,7 +119,6 @@ async fn nouvelle_demande_invalide_la_precedente() {
         assert_eq!(response.status, StatusCode::ACCEPTED);
     }
 
-    // Deux emails partis, mais un seul token actif en base (le dernier).
     for _ in 0..50 {
         if outbox.lock().unwrap().len() >= 2 {
             break;
@@ -144,7 +135,6 @@ async fn nouvelle_demande_invalide_la_precedente() {
         "une nouvelle demande remplace la précédente"
     );
 
-    // Le token du premier email ne fonctionne plus, celui du second oui.
     let emails = outbox.lock().unwrap().clone();
     let token_of = |body: &str| {
         body.split("token=")
@@ -216,11 +206,6 @@ async fn json_malforme_400() {
     db.drop().await.unwrap();
 }
 
-// ---------------------------------------------------------------------------
-// US-18 — POST /password/reset
-// ---------------------------------------------------------------------------
-
-/// Déclenche un forgot et rend le token en clair capturé dans l'email.
 async fn forgot_and_capture_token(
     state: &ch_api_authenticator::state::AppState,
     outbox: &std::sync::Arc<
@@ -256,7 +241,6 @@ async fn parcours_complet_forgot_reset_login() {
     seed_user(&state, "martin@test.fr", HashMap::new()).await;
     let token = forgot_and_capture_token(&state, &outbox, "martin@test.fr").await;
 
-    // Reset avec le token du lien.
     let reset = post_json(
         router(state.clone()),
         "/password/reset",
@@ -266,7 +250,6 @@ async fn parcours_complet_forgot_reset_login() {
     .await;
     assert_eq!(reset.status, StatusCode::OK);
 
-    // Le nouveau mot de passe fonctionne, l'ancien est refusé.
     login_token_with(&state, "martin@test.fr", "nouveau-mdp-solide").await;
     let ancien = post_json(
         router(state.clone()),
@@ -277,7 +260,6 @@ async fn parcours_complet_forgot_reset_login() {
     .await;
     assert_eq!(ancien.status, StatusCode::UNAUTHORIZED);
 
-    // Le hash en base est bien de l'Argon2id tout neuf.
     let stored = state
         .users
         .find_by_email("martin@test.fr")
@@ -300,7 +282,6 @@ async fn token_a_usage_strictement_unique() {
     let premier = post_json(router(state.clone()), "/password/reset", &body, &[]).await;
     assert_eq!(premier.status, StatusCode::OK);
 
-    // Rejeu du même token → 400 générique.
     let rejeu = post_json(router(state), "/password/reset", &body, &[]).await;
     assert_eq!(rejeu.status, StatusCode::BAD_REQUEST);
 
@@ -313,7 +294,6 @@ async fn token_inconnu_ou_expire_400_generique() {
     let (state, _) = test_state_with_outbox(&db).await;
     let user = seed_user(&state, "martin@test.fr", HashMap::new()).await;
 
-    // Token inconnu.
     let inconnu = post_json(
         router(state.clone()),
         "/password/reset",
@@ -323,7 +303,6 @@ async fn token_inconnu_ou_expire_400_generique() {
     .await;
     assert_eq!(inconnu.status, StatusCode::BAD_REQUEST);
 
-    // Token expiré : enregistré avec un TTL nul.
     let token = ch_api_authenticator::services::secure_token::generate();
     state
         .reset_tokens
@@ -343,7 +322,6 @@ async fn token_inconnu_ou_expire_400_generique() {
     .await;
     assert_eq!(expire.status, StatusCode::BAD_REQUEST);
 
-    // Les deux réponses sont identiques (sans distinguer la cause).
     assert_eq!(inconnu.body, expire.body);
 
     db.drop().await.unwrap();
@@ -356,7 +334,6 @@ async fn mot_de_passe_trop_court_ne_brule_pas_le_token() {
     seed_user(&state, "martin@test.fr", HashMap::new()).await;
     let token = forgot_and_capture_token(&state, &outbox, "martin@test.fr").await;
 
-    // Mot de passe trop court → 400, mais le token doit rester utilisable.
     let court = post_json(
         router(state.clone()),
         "/password/reset",

@@ -1,5 +1,3 @@
-//! US-02 — Inscription : validation, Argon2id, rôles par défaut, 201/409/400.
-
 mod common;
 
 use axum::http::StatusCode;
@@ -23,7 +21,6 @@ async fn inscription_valide_201_avec_hash_et_roles_par_defaut() {
     assert_eq!(response.status, StatusCode::CREATED);
     assert!(response.body["user_id"].is_string());
 
-    // Vérifications en base : email normalisé, hash Argon2id, rôles de la config.
     let stored = state
         .users
         .find_by_email("nouveau@test.fr")
@@ -42,7 +39,6 @@ async fn roles_du_body_ignores() {
     let db = test_db().await;
     let state = test_state(&db).await;
 
-    // Tentative d'escalade : roles/is_super_admin dans le body → champs inconnus ignorés.
     let response = post_json(
         router(state.clone()),
         "/register",
@@ -89,12 +85,12 @@ async fn payloads_invalides_400() {
     let state = test_state(&db).await;
 
     for body in [
-        r#"{"name": "X", "email": "pas-un-email", "password": "motdepasse"}"#, // email invalide
-        r#"{"name": "X", "email": "ok@test.fr", "password": "court"}"#,        // mdp < 8
-        r#"{"name": "X", "email": "ok@test.fr"}"#,                             // mdp manquant
-        r#"{"email": "ok@test.fr", "password": "motdepasse"}"#,                // nom manquant
-        r#"{"name": "  ", "email": "ok2@test.fr", "password": "motdepasse"}"#, // nom vide
-        "pas du json",                                                         // JSON malformé
+        r#"{"name": "X", "email": "pas-un-email", "password": "motdepasse"}"#,
+        r#"{"name": "X", "email": "ok@test.fr", "password": "court"}"#,
+        r#"{"name": "X", "email": "ok@test.fr"}"#,
+        r#"{"email": "ok@test.fr", "password": "motdepasse"}"#,
+        r#"{"name": "  ", "email": "ok2@test.fr", "password": "motdepasse"}"#,
+        "pas du json",
     ] {
         let response = post_json(router(state.clone()), "/register", body, &[]).await;
         assert_eq!(response.status, StatusCode::BAD_REQUEST, "payload : {body}");
@@ -120,7 +116,6 @@ async fn inscription_cree_un_compte_en_attente_de_validation() {
     .await;
     assert_eq!(response.status, StatusCode::CREATED);
 
-    // US-8.1 : le compte est créé « en attente de validation », pas actif.
     let stored = state
         .users
         .find_by_email("attente@test.fr")

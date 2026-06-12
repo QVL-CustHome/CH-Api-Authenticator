@@ -1,9 +1,3 @@
-//! Émission (US-03) et validation (US-05) des JWT HS256.
-//!
-//! Le token embarque tout ce dont `/validate` a besoin pour répondre
-//! sans aucune I/O (contrat Gateway < 100 ms) : rôles par portail et
-//! IP de login pour les comptes whitelist (US-04).
-
 use crate::domain::user::User;
 use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
@@ -11,12 +5,12 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
-    /// Identifiant utilisateur (ObjectId hexadécimal).
+
     pub sub: String,
-    /// Rôles globaux de l'utilisateur : ex. `["admin"]`.
+
     #[serde(default, deserialize_with = "crate::domain::user::deserialize_roles")]
     pub roles: Vec<String>,
-    /// IP de login, présente uniquement pour les comptes `whitelist_only` (US-04).
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ip: Option<String>,
     pub iat: u64,
@@ -42,7 +36,6 @@ impl JwtService {
         self.ttl.as_secs()
     }
 
-    /// Émet un token signé pour un utilisateur dont l'`id` est renseigné.
     pub fn issue(
         &self,
         user: &User,
@@ -62,8 +55,6 @@ impl JwtService {
         jsonwebtoken::encode(&Header::new(Algorithm::HS256), &claims, &self.encoding)
     }
 
-    /// Valide signature + expiration et rend les claims. Aucune I/O (US-05).
-    // Consommé en US-05 (GET /validate).
     #[allow(dead_code)]
     pub fn validate(&self, token: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
         let validation = Validation::new(Algorithm::HS256);
@@ -122,7 +113,7 @@ mod tests {
     #[test]
     fn token_expire_rejete() {
         let service = JwtService::new(SECRET, 15);
-        // Token forgé avec une expiration passée (hors de la fenêtre de tolérance).
+
         let now = unix_now();
         let claims = Claims {
             sub: "x".to_string(),

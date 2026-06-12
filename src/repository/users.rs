@@ -1,12 +1,9 @@
-//! Accès à la collection `users` (US-01).
-
 use crate::domain::user::{AccountStatus, User};
 use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
 use mongodb::options::IndexOptions;
 use mongodb::{Collection, Database, IndexModel};
 
-/// Code serveur MongoDB pour une violation d'index unique.
 const DUPLICATE_KEY_CODE: i32 = 11000;
 
 #[derive(Debug, thiserror::Error)]
@@ -29,7 +26,6 @@ impl UserRepository {
         }
     }
 
-    /// Crée l'index unique sur `email`. Idempotent, appelé au démarrage.
     pub async fn ensure_indexes(&self) -> Result<(), mongodb::error::Error> {
         let index = IndexModel::builder()
             .keys(doc! { "email": 1 })
@@ -60,8 +56,6 @@ impl UserRepository {
         self.collection.find_one(doc! { "_id": id }).await
     }
 
-    /// Liste paginée (US-20), triée par date de création, avec filtres
-    /// optionnels par email exact (normalisé) et par état (US-8.2). Rend le total.
     pub async fn list(
         &self,
         skip: u64,
@@ -94,7 +88,6 @@ impl UserRepository {
         Ok((users, total))
     }
 
-    /// Remplace la map des rôles par portail (US-20). `Ok(false)` si l'id est inconnu.
     pub async fn update_roles(
         &self,
         id: ObjectId,
@@ -112,7 +105,6 @@ impl UserRepository {
         Ok(result.matched_count == 1)
     }
 
-    /// Met à jour la restriction whitelist (US-20). `Ok(false)` si l'id est inconnu.
     pub async fn update_whitelist(
         &self,
         id: ObjectId,
@@ -131,9 +123,6 @@ impl UserRepository {
         Ok(result.matched_count == 1)
     }
 
-    /// Ajoute une IP à la whitelist si elle n'y est pas déjà (auto-apprentissage
-    /// des appareils au login quand le compte n'est pas en `whitelist_only`).
-    /// Idempotent grâce à `$addToSet`. `Ok(false)` si l'id est inconnu.
     pub async fn add_allowed_ip(
         &self,
         id: ObjectId,
@@ -150,7 +139,6 @@ impl UserRepository {
         Ok(result.matched_count == 1)
     }
 
-    /// Remplace le hash du mot de passe (US-18). `Ok(false)` si l'id est inconnu.
     pub async fn update_password(
         &self,
         id: ObjectId,
@@ -167,8 +155,6 @@ impl UserRepository {
         Ok(result.matched_count == 1)
     }
 
-    /// Change l'email (déjà normalisé par l'appelant). `Ok(false)` si l'id
-    /// est inconnu ; l'unicité reste garantie par l'index (US-14).
     pub async fn update_email(&self, id: ObjectId, email: &str) -> Result<bool, RepositoryError> {
         let update = doc! { "$set": {
             "email": email,
@@ -181,7 +167,6 @@ impl UserRepository {
         }
     }
 
-    /// Change le nom affiché (US-8.x). `Ok(false)` si l'id est inconnu.
     pub async fn update_name(
         &self,
         id: ObjectId,
@@ -198,8 +183,6 @@ impl UserRepository {
         Ok(result.matched_count == 1)
     }
 
-    /// Change l'état du compte (activation / désactivation / mise en attente, US-8.2).
-    /// `Ok(false)` si l'id est inconnu.
     pub async fn update_status(
         &self,
         id: ObjectId,
@@ -216,7 +199,6 @@ impl UserRepository {
         Ok(result.matched_count == 1)
     }
 
-    /// Supprime définitivement un compte (US-8.2). `Ok(false)` si l'id est inconnu.
     pub async fn delete(&self, id: ObjectId) -> Result<bool, mongodb::error::Error> {
         let result = self.collection.delete_one(doc! { "_id": id }).await?;
         Ok(result.deleted_count == 1)
@@ -236,8 +218,6 @@ fn is_duplicate_key(e: &mongodb::error::Error) -> bool {
 mod tests {
     use super::*;
 
-    /// Ces tests utilisent l'instance MongoDB locale (service Windows),
-    /// chacun dans une base jetable supprimée en fin de test.
     async fn test_db() -> Database {
         let client = mongodb::Client::with_uri_str("mongodb://localhost:27017")
             .await
@@ -256,7 +236,7 @@ mod tests {
         repo.ensure_indexes().await.unwrap();
 
         repo.insert(&user("doublon@test.fr")).await.unwrap();
-        // Même email avec une casse différente : normalisé, donc rejeté aussi.
+
         let err = repo.insert(&user("Doublon@Test.FR")).await.unwrap_err();
         assert!(matches!(err, RepositoryError::DuplicateEmail));
 

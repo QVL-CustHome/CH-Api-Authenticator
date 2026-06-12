@@ -1,6 +1,3 @@
-//! US-19 — Refresh tokens : rotation, détection de réutilisation (révocation
-//! de famille), logout, et révocation par changement/reset de mot de passe.
-
 mod common;
 
 use axum::http::StatusCode;
@@ -65,17 +62,14 @@ async fn rotation_nominale() {
     let response = refresh_with(&state, &refresh1).await;
     assert_eq!(response.status, StatusCode::OK);
 
-    // Nouveau couple : access valide (claims relus), refresh différent.
     let access = response.body["access_token"].as_str().unwrap();
     let claims = state.jwt.validate(access).unwrap();
     assert_eq!(claims.roles, vec!["user".to_string()]);
     let refresh2 = response.body["refresh_token"].as_str().unwrap().to_string();
     assert_ne!(refresh1, refresh2, "le refresh token tourne à chaque usage");
 
-    // La chaîne continue : le nouveau refresh fonctionne.
     assert_eq!(refresh_with(&state, &refresh2).await.status, StatusCode::OK);
-    // L'ancien (déjà tourné) est mort — et son rejeu révoque la famille,
-    // comportement détaillé dans `reutilisation_revoque_toute_la_famille`.
+
     assert_eq!(
         refresh_with(&state, &refresh1).await.status,
         StatusCode::UNAUTHORIZED
@@ -91,19 +85,16 @@ async fn reutilisation_revoque_toute_la_famille() {
     seed_user(&state, "martin@test.fr", HashMap::new()).await;
     let (_, refresh1, _) = login_session(&state).await;
 
-    // Rotation légitime → refresh2.
     let refresh2 = refresh_with(&state, &refresh1).await.body["refresh_token"]
         .as_str()
         .unwrap()
         .to_string();
 
-    // Un voleur rejoue refresh1 (déjà tourné) → 401 + famille révoquée.
     assert_eq!(
         refresh_with(&state, &refresh1).await.status,
         StatusCode::UNAUTHORIZED
     );
 
-    // La victime est aussi déconnectée : refresh2 (pourtant jamais utilisé) est mort.
     assert_eq!(
         refresh_with(&state, &refresh2).await.status,
         StatusCode::UNAUTHORIZED,
@@ -120,7 +111,6 @@ async fn refresh_via_le_cookie_seul() {
     seed_user(&state, "martin@test.fr", HashMap::new()).await;
     let (_, refresh_token, _) = login_session(&state).await;
 
-    // Pas de body : le cookie ch_refresh suffit (chemin navigateur).
     let response = post_json(
         router(state.clone()),
         "/refresh",
@@ -150,7 +140,6 @@ async fn logout_revoque_et_expire_les_cookies() {
     .await;
     assert_eq!(response.status, StatusCode::OK);
 
-    // Cookies expirés (Max-Age=0) pour ch_token ET ch_refresh.
     for name in ["ch_token=", "ch_refresh="] {
         let cookie = response
             .set_cookies
@@ -160,7 +149,6 @@ async fn logout_revoque_et_expire_les_cookies() {
         assert!(cookie.contains("Max-Age=0"), "cookie expiré : {cookie}");
     }
 
-    // Le refresh token ne fonctionne plus.
     assert_eq!(
         refresh_with(&state, &refresh_token).await.status,
         StatusCode::UNAUTHORIZED
@@ -179,7 +167,7 @@ async fn token_inconnu_401() {
         refresh_with(&state, &inconnu).await.status,
         StatusCode::UNAUTHORIZED
     );
-    // Sans token du tout.
+
     let sans = post_json(router(state.clone()), "/refresh", "{}", &[]).await;
     assert_eq!(sans.status, StatusCode::UNAUTHORIZED);
 
@@ -193,10 +181,8 @@ async fn changement_de_roles_pris_en_compte_a_la_rotation() {
     let user = seed_user(&state, "martin@test.fr", HashMap::new()).await;
     let (access1, refresh1, _) = login_session(&state).await;
 
-    // Aucun rôle au login.
     assert!(state.jwt.validate(&access1).unwrap().roles.is_empty());
 
-    // Un admin attribue un rôle (mise à jour directe en attendant US-20).
     db.collection::<mongodb::bson::Document>("users")
         .update_one(
             mongodb::bson::doc! { "_id": user.id.unwrap() },
@@ -205,7 +191,6 @@ async fn changement_de_roles_pris_en_compte_a_la_rotation() {
         .await
         .unwrap();
 
-    // La rotation relit la base : le nouveau access token porte le rôle.
     let response = refresh_with(&state, &refresh1).await;
     assert_eq!(response.status, StatusCode::OK);
     let claims = state
@@ -223,7 +208,6 @@ async fn changement_et_reset_de_mot_de_passe_revoquent_les_refresh() {
     let (state, outbox) = test_state_with_outbox(&db).await;
     seed_user(&state, "martin@test.fr", HashMap::new()).await;
 
-    // 1. PUT /password révoque la session longue.
     let (access, refresh, _) = login_session(&state).await;
     use axum::body::Body;
     use axum::http::{Request, header};
@@ -247,7 +231,6 @@ async fn changement_et_reset_de_mot_de_passe_revoquent_les_refresh() {
         "PUT /password doit révoquer les refresh tokens"
     );
 
-    // 2. POST /password/reset révoque aussi.
     let login2 = post_json(
         router(state.clone()),
         "/login",

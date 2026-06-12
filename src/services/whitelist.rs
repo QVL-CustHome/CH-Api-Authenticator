@@ -1,15 +1,6 @@
-//! Vérification d'appartenance d'une IP à une whitelist (US-04).
-//!
-//! Les entrées acceptent des IP simples (`192.168.1.10`) ou des plages
-//! CIDR (`10.0.0.0/24`), IPv4 et IPv6. Une entrée illisible est loggée
-//! en WARN et ignorée : elle ne doit ni bloquer les autres entrées,
-//! ni ouvrir l'accès par défaut.
-
 use ipnet::IpNet;
 use std::net::IpAddr;
 
-/// Valide une liste d'entrées avant enregistrement (US-20) : chaque entrée
-/// doit être une IP ou un CIDR lisible. Rend la première entrée invalide.
 pub fn validate_entries(entries: &[String]) -> Result<(), String> {
     for entry in entries {
         let entry = entry.trim();
@@ -20,7 +11,6 @@ pub fn validate_entries(entries: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// `true` si `client_ip` correspond à au moins une entrée de `allowed`.
 pub fn ip_allowed(client_ip: IpAddr, allowed: &[String]) -> bool {
     allowed.iter().any(|entry| {
         let entry = entry.trim();

@@ -1,5 +1,3 @@
-//! Catalogue des rôles — réservé aux administrateurs (US-8.3). Un rôle = un nom.
-
 use crate::domain::role::Role;
 use crate::error::AppError;
 use crate::middleware::auth::PortalAdmin;
@@ -27,7 +25,6 @@ fn role_response(role: Role) -> RoleResponse {
     }
 }
 
-/// `GET /roles` → catalogue des rôles (US-8.3).
 pub async fn list_roles(
     State(state): State<AppState>,
     PortalAdmin(_admin): PortalAdmin,
@@ -44,7 +41,6 @@ pub struct CreateRoleRequest {
     pub name: String,
 }
 
-/// `POST /roles` → crée un rôle (US-8.3). `409` si déjà défini, `400` si vide.
 pub async fn create_role(
     State(state): State<AppState>,
     PortalAdmin(admin): PortalAdmin,
@@ -73,7 +69,6 @@ pub async fn create_role(
     }
 }
 
-/// `DELETE /roles/{id}` → supprime un rôle (US-8.3). `204` ou `404`.
 pub async fn delete_role(
     State(state): State<AppState>,
     PortalAdmin(admin): PortalAdmin,
