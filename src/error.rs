@@ -30,6 +30,11 @@ pub enum AppError {
     /// Identifiants valides mais compte désactivé par un administrateur (US-8.1).
     #[error("compte désactivé")]
     AccountDisabled,
+    /// Identifiants valides mais appareil (IP) non autorisé pour un compte
+    /// restreint par whitelist. Renvoyé APRÈS vérification du mot de passe,
+    /// donc sans fuite d'énumération.
+    #[error("vous n'êtes pas autorisé à vous connecter avec cet appareil")]
+    DeviceNotAllowed,
     #[error("erreur interne")]
     Internal,
 }
@@ -45,6 +50,7 @@ impl IntoResponse for AppError {
             AppError::NotFound(_) => (StatusCode::NOT_FOUND, "not_found"),
             AppError::AccountPending => (StatusCode::FORBIDDEN, "account_pending"),
             AppError::AccountDisabled => (StatusCode::FORBIDDEN, "account_disabled"),
+            AppError::DeviceNotAllowed => (StatusCode::FORBIDDEN, "device_not_allowed"),
             AppError::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
         };
         let body = json!({ "error": error, "message": self.to_string() });

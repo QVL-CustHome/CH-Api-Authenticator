@@ -131,6 +131,25 @@ impl UserRepository {
         Ok(result.matched_count == 1)
     }
 
+    /// Ajoute une IP à la whitelist si elle n'y est pas déjà (auto-apprentissage
+    /// des appareils au login quand le compte n'est pas en `whitelist_only`).
+    /// Idempotent grâce à `$addToSet`. `Ok(false)` si l'id est inconnu.
+    pub async fn add_allowed_ip(
+        &self,
+        id: ObjectId,
+        ip: &str,
+    ) -> Result<bool, mongodb::error::Error> {
+        let update = doc! {
+            "$addToSet": { "allowed_ips": ip },
+            "$set": { "updated_at": mongodb::bson::DateTime::now() },
+        };
+        let result = self
+            .collection
+            .update_one(doc! { "_id": id }, update)
+            .await?;
+        Ok(result.matched_count == 1)
+    }
+
     /// Remplace le hash du mot de passe (US-18). `Ok(false)` si l'id est inconnu.
     pub async fn update_password(
         &self,

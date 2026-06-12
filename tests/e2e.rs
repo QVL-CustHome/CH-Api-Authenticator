@@ -131,9 +131,10 @@ async fn parcours_whitelist_de_bout_en_bout() {
 
     let body = r#"{"email": "wl.e2e@custhome.fr", "password": "motdepasse-e2e"}"#;
 
-    // Login sans IP transmise → refusé.
+    // Login sans IP transmise → refusé (403 dédié, message d'appareil).
     let sans_ip = post_json(router(state.clone()), "/login", body, &[]).await;
-    assert_eq!(sans_ip.status, StatusCode::UNAUTHORIZED);
+    assert_eq!(sans_ip.status, StatusCode::FORBIDDEN);
+    assert_eq!(sans_ip.body["error"], "device_not_allowed");
 
     // Login depuis une IP de la liste → token lié à cette IP.
     let login = post_json(

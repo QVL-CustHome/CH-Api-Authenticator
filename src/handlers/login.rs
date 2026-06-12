@@ -73,18 +73,31 @@ pub async fn login(
         AccountStatus::Disabled => return Err(AppError::AccountDisabled),
     }
 
-    // US-04 : compte restreint par whitelist — IP requise et autorisée, sinon 401
-    // générique (indistinguable d'un mauvais mot de passe). L'IP de login est
-    // alors liée au token (claim `ip`) et revérifiée au /validate (US-05).
+    // US-04 : gestion de la whitelist d'appareils (IP). Contrôle fait APRÈS le
+    // mot de passe : le message dédié n'est donc obtenable que par le détenteur
+    // des bons identifiants (pas de fuite d'énumération).
+    let client_ip = client_ip_from_headers(&headers);
     let token_ip = if user.whitelist_only {
-        let Some(client_ip) = client_ip_from_headers(&headers) else {
-            return Err(AppError::Unauthorized);
+        // Compte verrouillé : IP requise et autorisée, sinon message explicite.
+        // L'IP de login est liée au token (claim `ip`) et revérifiée au /validate.
+        let Some(client_ip) = client_ip else {
+            return Err(AppError::DeviceNotAllowed);
         };
         if !whitelist::ip_allowed(client_ip, &user.allowed_ips) {
-            return Err(AppError::Unauthorized);
+            return Err(AppError::DeviceNotAllowed);
         }
         Some(client_ip.to_string())
     } else {
+        // Mode apprentissage : toute nouvelle IP de connexion est mémorisée
+        // (l'admin pourra ensuite verrouiller le compte sur ces appareils).
+        // L'échec d'enregistrement n'empêche pas la connexion.
+        if let (Some(client_ip), Some(id)) = (client_ip, user.id) {
+            if !whitelist::ip_allowed(client_ip, &user.allowed_ips) {
+                if let Err(e) = state.users.add_allowed_ip(id, &client_ip.to_string()).await {
+                    tracing::warn!(error = %e, "Auto-ajout de l'IP à la whitelist en échec");
+                }
+            }
+        }
         None
     };
 
