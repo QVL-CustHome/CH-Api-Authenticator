@@ -1,5 +1,3 @@
-//! US-00 — Socle : le serveur répond et les routes inconnues font 404.
-
 mod common;
 
 use axum::http::StatusCode;

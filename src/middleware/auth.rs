@@ -1,13 +1,3 @@
-//! Authentification interne des endpoints de l'API (US-13).
-//!
-//! Les routes `/api/auth/*` sont publiques côté Gateway : c'est l'Authenticator
-//! qui protège lui-même ses endpoints sensibles (profil, mot de passe, admin)
-//! via ces extracteurs Axum. Validation purement cryptographique — aucune I/O.
-//!
-//! Politique d'extraction identique à la Gateway (US-11) : le header
-//! `Authorization` prime ; le cookie n'est lu que si le header est absent ;
-//! un header présent mais malformé est rejeté sans repli sur le cookie.
-
 use crate::error::AppError;
 use crate::services::jwt::Claims;
 use crate::state::AppState;
@@ -15,7 +5,6 @@ use axum::extract::FromRequestParts;
 use axum::http::header;
 use axum::http::request::Parts;
 
-/// Utilisateur authentifié : claims du JWT validé.
 pub struct AuthUser(pub Claims);
 
 impl FromRequestParts<AppState> for AuthUser {
@@ -35,13 +24,10 @@ impl FromRequestParts<AppState> for AuthUser {
     }
 }
 
-/// Portail logique dont le rôle `admin` ouvre l'administration (US-8.2).
 pub const ADMIN_PORTAL: &str = "portail_admin";
-/// Rôle requis sur [`ADMIN_PORTAL`] pour administrer.
+
 pub const ADMIN_ROLE: &str = "admin";
 
-/// Utilisateur authentifié ET administrateur du portail d'administration :
-/// rôle `admin` sur `portail_admin` (US-8.2). `403` pour tout autre compte.
 pub struct PortalAdmin(pub Claims);
 
 impl FromRequestParts<AppState> for PortalAdmin {
@@ -60,8 +46,6 @@ impl FromRequestParts<AppState> for PortalAdmin {
     }
 }
 
-/// Header `Authorization: Bearer` prioritaire, cookie en fallback.
-/// Un header présent mais malformé → `None` (pas de repli silencieux).
 fn extract_token(parts: &Parts, cookie_name: &str) -> Option<String> {
     if let Some(value) = parts.headers.get(header::AUTHORIZATION) {
         let token = value.to_str().ok()?.strip_prefix("Bearer ")?.trim();
@@ -93,7 +77,6 @@ mod tests {
 
     const JWT_SECRET: &str = "un-secret-de-test-suffisamment-long!!!!!";
 
-    /// État sans connexion MongoDB (client lazy) : ces extracteurs n'ont pas d'I/O.
     fn test_state() -> AppState {
         let options = mongodb::options::ClientOptions::builder()
             .hosts(vec![mongodb::options::ServerAddress::Tcp {
@@ -138,7 +121,6 @@ mod tests {
         )
     }
 
-    /// Routeur de test : une route protégée AuthUser, une route garde PortalAdmin.
     fn test_router(state: AppState) -> Router {
         Router::new()
             .route(
@@ -352,7 +334,7 @@ mod tests {
     #[tokio::test]
     async fn garde_portal_admin_403_sans_le_bon_role() {
         let state = test_state();
-        // Un rôle autre qu'`admin` : insuffisant.
+
         let token = token_for_roles(&state, &["editor"]);
         let (status, _) = get_status(
             state,

@@ -1,9 +1,3 @@
-//! US-21 — Parcours de bout en bout du sprint 2 « Cycle de vie utilisateur ».
-//!
-//! Contrairement aux suites `api_*.rs`, TOUT passe ici par l'API — y compris
-//! les actions d'administration (le seul seed direct est le super-admin,
-//! équivalent du seed ADMIN_EMAIL/ADMIN_PASSWORD du démarrage).
-
 mod common;
 
 use axum::body::Body;
@@ -55,8 +49,6 @@ async fn validate_status(state: &State, token: &str, portal: &str) -> StatusCode
     .status
 }
 
-/// Cycle de vie complet : inscription → attribution admin via API → accès
-/// portail → rotation de session → changement de mdp → reconnexion → logout.
 #[tokio::test]
 async fn cycle_de_vie_complet_d_un_compte() {
     let db = test_db().await;
@@ -64,7 +56,6 @@ async fn cycle_de_vie_complet_d_un_compte() {
     seed_admin(&state, "root@custhome.fr").await;
     let admin = login_token(&state, "root@custhome.fr").await;
 
-    // 1. Inscription : aucun accès.
     let register = post_json(
         router(state.clone()),
         "/register",
@@ -75,13 +66,10 @@ async fn cycle_de_vie_complet_d_un_compte() {
     assert_eq!(register.status, StatusCode::CREATED);
     let user_id = register.body["user_id"].as_str().unwrap().to_string();
 
-    // US-8.1 : le compte est créé en attente ; un admin l'active (activation
-    // directe en attendant l'endpoint d'administration, US-8.2).
     activate_user(&db, "vie@custhome.fr").await;
-    // US-8.3 : le rôle attribué doit exister au catalogue.
+
     seed_role(&state, "user").await;
 
-    // 2. Le super-admin attribue un rôle VIA L'API.
     let (status, _) = put_json_auth(
         &state,
         &format!("/users/{user_id}/roles"),
@@ -91,7 +79,6 @@ async fn cycle_de_vie_complet_d_un_compte() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
-    // 3. Login : la session ouvre l'accès au portail.
     let login = post_json(
         router(state.clone()),
         "/login",
@@ -107,7 +94,6 @@ async fn cycle_de_vie_complet_d_un_compte() {
         StatusCode::OK
     );
 
-    // 4. /me reflète le rôle attribué.
     let me = get(
         router(state.clone()),
         "/me",
@@ -116,7 +102,6 @@ async fn cycle_de_vie_complet_d_un_compte() {
     .await;
     assert_eq!(me.body["roles"][0], "user");
 
-    // 5. Rotation : le nouveau access token donne toujours accès.
     let rotated = post_json(
         router(state.clone()),
         "/refresh",
@@ -132,7 +117,6 @@ async fn cycle_de_vie_complet_d_un_compte() {
         StatusCode::OK
     );
 
-    // 6. Changement de mot de passe : la session longue tombe.
     let (status, _) = put_json_auth(
         &state,
         "/password",
@@ -150,7 +134,6 @@ async fn cycle_de_vie_complet_d_un_compte() {
     .await;
     assert_eq!(dead.status, StatusCode::UNAUTHORIZED);
 
-    // 7. Reconnexion avec le nouveau mdp, puis logout → refresh mort.
     let relogin = post_json(
         router(state.clone()),
         "/login",
@@ -181,8 +164,6 @@ async fn cycle_de_vie_complet_d_un_compte() {
     db.drop().await.unwrap();
 }
 
-/// Parcours « mot de passe oublié » intégral, y compris la chute des
-/// sessions ouvertes avant le reset.
 #[tokio::test]
 async fn parcours_reset_integral() {
     let db = test_db().await;
@@ -197,7 +178,6 @@ async fn parcours_reset_integral() {
     .await;
     activate_user(&db, "oubli@custhome.fr").await;
 
-    // Session ouverte AVANT le reset : elle devra tomber.
     let login = post_json(
         router(state.clone()),
         "/login",
@@ -207,7 +187,6 @@ async fn parcours_reset_integral() {
     .await;
     let old_refresh = login.body["refresh_token"].as_str().unwrap().to_string();
 
-    // Demande de reset → lien capté dans l'email.
     let forgot = post_json(
         router(state.clone()),
         "/password/forgot",
@@ -236,7 +215,6 @@ async fn parcours_reset_integral() {
         .next()
         .unwrap();
 
-    // Reset → nouveau mdp actif, ancien refusé, session d'avant morte.
     let reset = post_json(
         router(state.clone()),
         "/password/reset",
@@ -272,8 +250,6 @@ async fn parcours_reset_integral() {
     db.drop().await.unwrap();
 }
 
-/// Whitelist administrée via l'API et appliquée sur tout le cycle :
-/// login, validate et rotation.
 #[tokio::test]
 async fn whitelist_administree_de_bout_en_bout() {
     let db = test_db().await;
@@ -292,7 +268,6 @@ async fn whitelist_administree_de_bout_en_bout() {
     activate_user(&db, "fixe@custhome.fr").await;
     seed_role(&state, "user").await;
 
-    // L'admin attribue un rôle ET active la whitelist via l'API.
     put_json_auth(
         &state,
         &format!("/users/{user_id}/roles"),
@@ -311,7 +286,6 @@ async fn whitelist_administree_de_bout_en_bout() {
 
     let login_body = r#"{"email": "fixe@custhome.fr", "password": "mdp-poste-fixe!"}"#;
 
-    // Login refusé hors whitelist (403 dédié), accepté depuis l'IP autorisée.
     let hors = post_json(router(state.clone()), "/login", login_body, &[]).await;
     assert_eq!(hors.status, StatusCode::FORBIDDEN);
     assert_eq!(hors.body["error"], "device_not_allowed");
@@ -326,7 +300,6 @@ async fn whitelist_administree_de_bout_en_bout() {
     let access = login.body["access_token"].as_str().unwrap().to_string();
     let refresh = login.body["refresh_token"].as_str().unwrap().to_string();
 
-    // /validate : OK depuis l'IP de login, refusé depuis une autre.
     let ok = get(
         router(state.clone()),
         "/validate",
@@ -350,7 +323,6 @@ async fn whitelist_administree_de_bout_en_bout() {
     .await;
     assert_eq!(vol.status, StatusCode::UNAUTHORIZED);
 
-    // La rotation exige aussi une IP whitelistée.
     let refus = post_json(
         router(state.clone()),
         "/refresh",

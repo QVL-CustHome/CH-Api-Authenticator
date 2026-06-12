@@ -1,9 +1,3 @@
-//! Collection `password_reset_tokens` (US-17/US-18).
-//!
-//! Chaque document est un token one-time : seul le hash SHA-256 y figure.
-//! Un index TTL Mongo purge automatiquement les tokens expirés ; la
-//! consommation revérifie l'expiration (le moniteur TTL tourne ~60 s).
-
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{DateTime, doc};
 use mongodb::options::IndexOptions;
@@ -32,7 +26,6 @@ impl ResetTokenRepository {
         }
     }
 
-    /// Index TTL (purge à `expires_at`) + unicité du hash. Idempotent.
     pub async fn ensure_indexes(&self) -> Result<(), mongodb::error::Error> {
         let ttl = IndexModel::builder()
             .keys(doc! { "expires_at": 1 })
@@ -51,8 +44,6 @@ impl ResetTokenRepository {
         Ok(())
     }
 
-    /// Enregistre un nouveau token pour l'utilisateur, en invalidant tous
-    /// les précédents (une seule demande valable à la fois, US-17).
     pub async fn replace_for_user(
         &self,
         user_id: ObjectId,
@@ -76,8 +67,6 @@ impl ResetTokenRepository {
         Ok(())
     }
 
-    /// Consomme un token de façon atomique (US-18) : il doit exister,
-    /// ne pas être expiré et ne jamais avoir servi. `None` sinon.
     pub async fn consume(
         &self,
         token_hash: &str,
@@ -94,7 +83,6 @@ impl ResetTokenRepository {
             .await
     }
 
-    /// Nombre de tokens actifs d'un utilisateur (assertions de test).
     pub async fn count_for_user(&self, user_id: ObjectId) -> Result<u64, mongodb::error::Error> {
         self.collection
             .count_documents(doc! { "user_id": user_id })

@@ -1,6 +1,3 @@
-//! Sessions longues : émission du couple access + refresh (login US-03/US-19),
-//! rotation (`POST /refresh`) et déconnexion (`POST /logout`).
-
 use crate::domain::user::User;
 use crate::error::AppError;
 use crate::handlers::login::client_ip_from_headers;
@@ -22,12 +19,11 @@ pub struct SessionBody {
     pub access_token: String,
     pub token_type: &'static str,
     pub expires_in: u64,
-    /// Refresh token opaque (US-19) — aussi posé en cookie HttpOnly.
+
     pub refresh_token: String,
     pub refresh_expires_in: u64,
 }
 
-/// Couple body + cookies prêt à répondre (login et refresh).
 pub struct Session {
     pub body: SessionBody,
     pub cookies: [String; 2],
@@ -44,7 +40,6 @@ impl IntoResponse for Session {
     }
 }
 
-/// Émet un access token JWT + un refresh token opaque (nouvelle famille).
 pub async fn create_session(
     state: &AppState,
     user: &User,
@@ -53,7 +48,6 @@ pub async fn create_session(
     create_session_in_family(state, user, token_ip, ObjectId::new()).await
 }
 
-/// Variante rotation : le nouveau refresh token reste dans la famille du login.
 pub async fn create_session_in_family(
     state: &AppState,
     user: &User,
@@ -109,16 +103,12 @@ pub async fn create_session_in_family(
     })
 }
 
-// Pas de derive Debug : un token ne doit jamais fuiter dans les logs.
 #[derive(Deserialize, Default)]
 pub struct RefreshRequest {
     #[serde(default)]
     pub refresh_token: Option<String>,
 }
 
-/// `POST /refresh` → rotation : l'ancien refresh token est révoqué, un
-/// nouveau couple access + refresh est émis. La réutilisation d'un token
-/// déjà tourné révoque toute la famille (vol suspecté).
 pub async fn refresh(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -126,7 +116,7 @@ pub async fn refresh(
 ) -> Result<impl IntoResponse, AppError> {
     let body = match payload {
         Ok(Json(request)) => request,
-        // Body absent : le cookie suffit (chemin navigateur).
+
         Err(_) => RefreshRequest::default(),
     };
 
@@ -164,8 +154,6 @@ pub async fn refresh(
         RotationOutcome::Unknown => return Err(AppError::InvalidToken),
     };
 
-    // Les rôles sont relus en base : un changement d'attribution (US-20)
-    // est pris en compte dès la rotation suivante.
     let user = state
         .users
         .find_by_id(consumed.user_id)
@@ -183,8 +171,6 @@ pub async fn refresh(
         return Err(AppError::InvalidToken);
     };
 
-    // Comptes whitelist : mêmes exigences qu'au login (US-04). Un échec
-    // consomme la rotation — il faudra se reconnecter depuis une IP valide.
     let token_ip = if user.whitelist_only {
         let Some(client_ip) = client_ip_from_headers(&headers) else {
             return Err(AppError::InvalidToken);
@@ -200,8 +186,6 @@ pub async fn refresh(
     create_session_in_family(&state, &user, token_ip, consumed.family_id).await
 }
 
-/// `POST /logout` → révoque la famille du refresh token présenté (cookie ou
-/// body) et expire les cookies. Toujours `200`, même sans token exploitable.
 pub async fn logout(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -246,7 +230,6 @@ pub async fn logout(
     )
 }
 
-/// Cookie HttpOnly (Max-Age=0 → suppression côté navigateur).
 fn build_cookie(name: &str, value: &str, max_age: u64, secure: bool) -> String {
     let mut cookie = format!("{name}={value}; HttpOnly; SameSite=Lax; Path=/; Max-Age={max_age}");
     if secure {
@@ -255,7 +238,6 @@ fn build_cookie(name: &str, value: &str, max_age: u64, secure: bool) -> String {
     cookie
 }
 
-/// Valeur d'un cookie par nom.
 fn cookie_value(headers: &HeaderMap, name: &str) -> Option<String> {
     let cookies = headers.get(header::COOKIE)?.to_str().ok()?;
     cookies.split(';').find_map(|pair| {

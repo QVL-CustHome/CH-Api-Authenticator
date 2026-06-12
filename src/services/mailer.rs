@@ -1,22 +1,9 @@
-//! Envoi des emails (US-16).
-//!
-//! Trois modes :
-//! - `Smtp` : envoi réel via `lettre` (TLS rustls, pool de connexions) ;
-//! - `Dev` : l'email est loggé en WARN au lieu d'être envoyé — aucun
-//!   serveur requis pour développer, le lien de reset est visible ;
-//! - `Memory` : capture en mémoire pour les tests d'intégration.
-//!
-//! L'envoi n'échoue JAMAIS du point de vue de l'appelant : une erreur SMTP
-//! est loggée mais ne change ni la réponse HTTP ni le flux métier
-//! (indispensable pour l'anti-énumération du reset, US-17).
-
 use crate::config::{EmailMode, Settings};
 use lettre::message::Mailbox;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 use std::sync::{Arc, Mutex};
 
-/// Email capturé par le mode [`Mailer::Memory`].
 #[derive(Debug, Clone)]
 pub struct SentEmail {
     pub to: String,
@@ -34,8 +21,7 @@ pub enum Mailer {
 }
 
 impl Mailer {
-    /// Construit le mailer depuis la configuration. Fail-fast : expéditeur
-    /// illisible ou mode smtp incomplet → erreur explicite au démarrage.
+
     pub fn from_settings(settings: &Settings) -> Result<Self, String> {
         match settings.config.email.mode {
             EmailMode::Dev => Ok(Mailer::Dev),
@@ -68,14 +54,11 @@ impl Mailer {
         }
     }
 
-    /// Capture en mémoire pour les tests.
     pub fn memory() -> (Self, Arc<Mutex<Vec<SentEmail>>>) {
         let outbox = Arc::new(Mutex::new(Vec::new()));
         (Mailer::Memory(outbox.clone()), outbox)
     }
 
-    /// Envoie un email. Ne renvoie jamais d'erreur : un échec est loggé,
-    /// la réponse HTTP de l'appelant n'en dépend pas.
     pub async fn send(&self, to: &str, subject: &str, body: &str) {
         match self {
             Mailer::Dev => {
@@ -183,8 +166,6 @@ mod tests {
         assert!(err.contains("email.from"), "erreur : {err}");
     }
 
-    // Le pool de connexions de lettre spawne une tâche de fond au build :
-    // un runtime Tokio est requis (comme dans le main en production).
     #[tokio::test]
     async fn mode_smtp_complet_construit() {
         let mailer = Mailer::from_settings(&settings(

@@ -1,21 +1,12 @@
-//! Tokens opaques sécurisés : reset de mot de passe (US-17) et
-//! refresh tokens (US-19).
-//!
-//! Le token remis au client est un secret de 32 octets aléatoires ;
-//! seul son hash SHA-256 est stocké en base — un dump de la base ne
-//! permet ni de réinitialiser un compte ni de rejouer une session.
-
 use rand_core::{OsRng, RngCore};
 use sha2::{Digest, Sha256};
 
-/// Génère un token aléatoire (64 caractères hexadécimaux, URL-safe).
 pub fn generate() -> String {
     let mut bytes = [0u8; 32];
     OsRng.fill_bytes(&mut bytes);
     hex::encode(bytes)
 }
 
-/// Hash de stockage (SHA-256 hexadécimal).
 pub fn hash(token: &str) -> String {
     hex::encode(Sha256::digest(token.as_bytes()))
 }

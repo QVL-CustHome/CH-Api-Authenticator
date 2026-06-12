@@ -1,5 +1,3 @@
-//! Catalogue des rôles attribuables (US-8.3) — un rôle est un simple nom unique.
-
 use mongodb::bson::DateTime;
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
@@ -8,7 +6,7 @@ use serde::{Deserialize, Serialize};
 pub struct Role {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<ObjectId>,
-    /// Nom du rôle (unique). Ex: `admin`, `editor`.
+
     pub name: String,
     pub created_at: DateTime,
 }

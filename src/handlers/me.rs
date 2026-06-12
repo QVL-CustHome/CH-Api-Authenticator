@@ -1,5 +1,3 @@
-//! Profil de l'utilisateur connecté (US-14).
-
 use crate::domain::user::{AccountStatus, User};
 use crate::error::AppError;
 use crate::middleware::auth::AuthUser;
@@ -12,17 +10,16 @@ use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-/// Profil exposé — jamais le `password_hash`.
 #[derive(Serialize)]
 pub struct MeResponse {
     pub user_id: String,
     pub name: String,
     pub email: String,
     pub roles: Vec<String>,
-    /// État du compte (US-8.1) : `active` / `pending_validation` / `disabled`.
+
     pub status: AccountStatus,
     pub whitelist_only: bool,
-    /// IP/CIDR autorisés (auto-appris au login ou gérés par un admin).
+
     pub allowed_ips: Vec<String>,
     pub created_at: String,
 }
@@ -33,7 +30,6 @@ pub struct UpdateMeRequest {
     pub email: String,
 }
 
-/// `GET /me` → `200` profil de l'utilisateur du token.
 pub async fn get_me(
     State(state): State<AppState>,
     AuthUser(claims): AuthUser,
@@ -42,8 +38,6 @@ pub async fn get_me(
     Ok(Json(profile(user)))
 }
 
-/// `PUT /me` → changement d'email (seul champ modifiable ce sprint).
-/// `409` si l'email est déjà utilisé, `400` si invalide.
 pub async fn update_me(
     State(state): State<AppState>,
     AuthUser(claims): AuthUser,
@@ -59,7 +53,7 @@ pub async fn update_me(
 
     match state.users.update_email(id, &email).await {
         Ok(true) => {}
-        // Token valide mais compte disparu : la session n'est plus exploitable.
+
         Ok(false) => return Err(AppError::InvalidToken),
         Err(RepositoryError::DuplicateEmail) => {
             return Err(AppError::Conflict("email déjà utilisé"));
@@ -91,7 +85,6 @@ fn parse_user_id(sub: &str) -> Result<ObjectId, AppError> {
     ObjectId::parse_str(sub).map_err(|_| AppError::InvalidToken)
 }
 
-/// Réutilisé par les endpoints admin (US-20) — jamais de `password_hash`.
 pub fn profile(user: User) -> MeResponse {
     MeResponse {
         user_id: user.id.map(|id| id.to_hex()).unwrap_or_default(),

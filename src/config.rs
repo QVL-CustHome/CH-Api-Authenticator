@@ -1,21 +1,12 @@
-//! Chargement et validation de la configuration (US-00).
-//!
-//! Deux sources, jamais de secret dans le fichier :
-//! - `config.toml` : valeurs non sensibles, surchargées par les variables
-//!   d'environnement préfixées `CH__` (ex. `CH__SERVER__PORT=9000`) ;
-//! - variables d'environnement dédiées aux secrets : `JWT_SECRET`,
-//!   `MONGO_URI`, et le seed super-admin `ADMIN_EMAIL` / `ADMIN_PASSWORD` (US-01).
-
 use figment::Figment;
 use figment::providers::{Env, Format, Toml};
 use serde::Deserialize;
 
-/// Taille minimale du secret JWT, en octets.
 pub const MIN_JWT_SECRET_BYTES: usize = 32;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
-    // Boxé : figment::Error est volumineux (clippy::result_large_err).
+
     #[error("fichier de configuration invalide : {0}")]
     File(Box<figment::Error>),
     #[error("variable d'environnement requise manquante ou vide : {0}")]
@@ -44,13 +35,12 @@ pub struct Config {
     pub password_reset: PasswordResetConfig,
 }
 
-/// Réinitialisation de mot de passe par email (US-17/US-18).
 #[derive(Debug, Clone, Deserialize)]
 pub struct PasswordResetConfig {
-    /// Page du front d'auth qui consommera le token : `{url}?token=...`.
+
     #[serde(default = "default_reset_url")]
     pub url: String,
-    /// Durée de vie du token one-time, en minutes.
+
     #[serde(default = "default_reset_ttl")]
     pub ttl_minutes: u64,
 }
@@ -81,17 +71,17 @@ pub struct ServerConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct TokenConfig {
-    /// Durée de vie de l'access token, en minutes.
+
     pub ttl_minutes: u64,
-    /// Nom du cookie HttpOnly posé au login (US-03).
+
     pub cookie_name: String,
-    /// Attribut Secure du cookie — `false` uniquement en dev local.
+
     #[serde(default)]
     pub cookie_secure: bool,
-    /// Durée de vie des refresh tokens, en jours (US-19).
+
     #[serde(default = "default_refresh_ttl_days")]
     pub refresh_ttl_days: u64,
-    /// Cookie HttpOnly du refresh token (US-19).
+
     #[serde(default = "default_refresh_cookie_name")]
     pub refresh_cookie_name: String,
 }
@@ -106,19 +96,16 @@ fn default_refresh_cookie_name() -> String {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct RegistrationConfig {
-    /// Rôles attribués à l'inscription : `{ portail = ["rôle"] }`. Vide par
-    /// défaut ; l'attribution passe sinon par les endpoints d'administration.
+
     #[serde(default)]
     pub default_roles: Vec<String>,
 }
 
-/// Envoi des emails (US-16). En mode `dev`, les emails sont loggés au lieu
-/// d'être envoyés — aucun serveur SMTP requis pour développer.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct EmailConfig {
     #[serde(default)]
     pub mode: EmailMode,
-    /// Expéditeur, ex : `CustHome <no-reply@custhome.local>`.
+
     #[serde(default = "default_email_from")]
     pub from: String,
 }
@@ -131,21 +118,19 @@ pub enum EmailMode {
     Smtp,
 }
 
-/// Secrets chargés exclusivement depuis l'environnement.
 #[derive(Clone)]
 pub struct Secrets {
     pub jwt_secret: String,
     pub mongo_uri: String,
     pub admin_email: Option<String>,
     pub admin_password: Option<String>,
-    /// SMTP (US-16) — requis uniquement si `email.mode = "smtp"`.
+
     pub smtp_host: Option<String>,
     pub smtp_port: Option<u16>,
     pub smtp_user: Option<String>,
     pub smtp_password: Option<String>,
 }
 
-// Debug manuel : les valeurs ne doivent jamais fuiter dans les logs.
 impl std::fmt::Debug for Secrets {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Secrets")
@@ -212,7 +197,6 @@ fn parse_optional_port(name: &'static str) -> Result<Option<u16>, ConfigError> {
     }
 }
 
-/// US-16 : le mode smtp exige au minimum un hôte — échec explicite au démarrage.
 fn validate_email(email: &EmailConfig, secrets: &Secrets) -> Result<(), ConfigError> {
     if email.mode == EmailMode::Smtp && secrets.smtp_host.is_none() {
         return Err(ConfigError::MissingSecret("SMTP_HOST"));
@@ -309,9 +293,9 @@ mod tests {
             .extract()
             .expect("la config minimale doit se charger");
         assert_eq!(config.server.port, 8081);
-        assert_eq!(config.server.log_level, "INFO"); // valeur par défaut
+        assert_eq!(config.server.log_level, "INFO");
         assert_eq!(config.token.ttl_minutes, 15);
-        assert!(!config.token.cookie_secure); // défaut sûr en absence de valeur
+        assert!(!config.token.cookie_secure);
         assert!(config.registration.default_roles.is_empty());
     }
 

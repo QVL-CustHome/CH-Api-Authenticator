@@ -1,6 +1,3 @@
-//! US-06 — Logs JSON corrélés : X-Correlation-ID propagé sur toutes les
-//! lignes de la requête, log d'accès, et jamais de secret dans les logs.
-
 mod common;
 
 use axum::http::StatusCode;
@@ -13,7 +10,6 @@ use std::sync::{Arc, Mutex};
 use tracing::instrument::WithSubscriber;
 use tracing_subscriber::fmt::MakeWriter;
 
-/// Writer partagé pour capturer la sortie JSON du subscriber pendant un test.
 #[derive(Clone, Default)]
 struct CaptureWriter(Arc<Mutex<Vec<u8>>>);
 
@@ -48,7 +44,6 @@ impl<'a> MakeWriter<'a> for CaptureWriter {
     }
 }
 
-/// Exécute `fut` avec un subscriber JSON dédié et rend les logs capturés.
 async fn with_json_logs<F, T>(fut: F) -> (CaptureWriter, T)
 where
     F: Future<Output = T>,
@@ -95,7 +90,7 @@ async fn correlation_id_genere_si_absent() {
     let generated = response
         .correlation_id
         .expect("un correlation id est généré");
-    // UUID v4 : 36 caractères avec tirets.
+
     assert_eq!(generated.len(), 36);
 
     db.drop().await.unwrap();
@@ -107,8 +102,7 @@ async fn toutes_les_lignes_de_log_portent_le_correlation_id() {
     let state = test_state(&db).await;
 
     let (writer, _) = with_json_logs(async {
-        // /validate sans token → le handler renvoie 401 ; au moins la ligne
-        // d'accès est émise dans le span portant le correlation id.
+
         get(
             router(state.clone()),
             "/validate",
@@ -162,8 +156,7 @@ async fn jamais_de_mot_de_passe_ni_token_dans_les_logs() {
     seed_user(&state, "martin@test.fr", HashMap::new()).await;
 
     let (writer, token) = with_json_logs(async {
-        // Parcours complet : register (mdp en clair dans le body), login OK,
-        // login KO — aucun de ces secrets ne doit se retrouver dans les logs.
+
         post_json(
             router(state.clone()),
             "/register",

@@ -1,12 +1,9 @@
-//! Accès à la collection `roles` : catalogue des noms de rôles (US-8.3).
-
 use crate::domain::role::Role;
 use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
 use mongodb::options::IndexOptions;
 use mongodb::{Collection, Database, IndexModel};
 
-/// Code serveur MongoDB pour une violation d'index unique.
 const DUPLICATE_KEY_CODE: i32 = 11000;
 
 #[derive(Debug, thiserror::Error)]
@@ -29,7 +26,6 @@ impl RoleRepository {
         }
     }
 
-    /// Index unique sur `name`. Idempotent, appelé au démarrage.
     pub async fn ensure_indexes(&self) -> Result<(), mongodb::error::Error> {
         let index = IndexModel::builder()
             .keys(doc! { "name": 1 })
@@ -50,7 +46,6 @@ impl RoleRepository {
         }
     }
 
-    /// Liste les rôles, triés par nom.
     pub async fn list(&self) -> Result<Vec<Role>, mongodb::error::Error> {
         let mut cursor = self
             .collection
@@ -64,13 +59,11 @@ impl RoleRepository {
         Ok(roles)
     }
 
-    /// Supprime un rôle. `Ok(false)` si l'id est inconnu.
     pub async fn delete(&self, id: ObjectId) -> Result<bool, mongodb::error::Error> {
         let result = self.collection.delete_one(doc! { "_id": id }).await?;
         Ok(result.deleted_count == 1)
     }
 
-    /// Vrai si le rôle `name` existe (validation d'attribution, US-8.3).
     pub async fn exists(&self, name: &str) -> Result<bool, mongodb::error::Error> {
         let found = self
             .collection

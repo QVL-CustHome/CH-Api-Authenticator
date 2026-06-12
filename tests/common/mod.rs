@@ -1,9 +1,3 @@
-//! Helpers partagés par la suite d'intégration `tests/api_*.rs`.
-//!
-//! Chaque test travaille dans une base MongoDB jetable (instance locale),
-//! supprimée en fin de test via `Database::drop`.
-
-// Chaque binaire de test ne consomme qu'une partie des helpers.
 #![allow(dead_code)]
 
 use axum::Router;
@@ -29,7 +23,6 @@ use tower::ServiceExt;
 pub const JWT_SECRET: &str = "un-secret-de-test-suffisamment-long!!!!!";
 pub const PASSWORD: &str = "bon-mot-de-passe";
 
-/// Base jetable sur la MongoDB locale (service Windows — pas de Docker).
 pub async fn test_db() -> Database {
     let client = mongodb::Client::with_uri_str("mongodb://localhost:27017")
         .await
@@ -53,7 +46,6 @@ pub async fn test_state_with(
     state
 }
 
-/// État sans création d'index — utilisable avec une base injoignable (US-07).
 pub fn state_for_db(
     db: &Database,
     cookie_secure: bool,
@@ -62,7 +54,6 @@ pub fn state_for_db(
     state_with_mailer(db, cookie_secure, default_roles, Mailer::Dev)
 }
 
-/// État avec un mailer Memory : rend la boîte d'envoi pour les assertions (US-16+).
 pub async fn test_state_with_outbox(db: &Database) -> (AppState, Arc<Mutex<Vec<SentEmail>>>) {
     let (mailer, outbox) = Mailer::memory();
     let state = state_with_mailer(db, false, HashMap::new(), mailer);
@@ -114,8 +105,6 @@ pub fn state_with_mailer(
     )
 }
 
-/// Base volontairement injoignable (port fermé, timeout court) pour
-/// éprouver le mode dégradé (US-07).
 pub fn broken_db() -> Database {
     let options = mongodb::options::ClientOptions::builder()
         .hosts(vec![mongodb::options::ServerAddress::Tcp {
@@ -129,7 +118,6 @@ pub fn broken_db() -> Database {
         .database("down")
 }
 
-/// Insère un utilisateur avec le mot de passe [`PASSWORD`] et rend l'utilisateur persisté.
 pub async fn seed_user(state: &AppState, email: &str, roles: HashMap<String, Vec<String>>) -> User {
     let flat: Vec<String> = roles.into_values().flatten().collect();
     let mut user = User::new(email, password::hash(PASSWORD).unwrap(), flat);
@@ -147,8 +135,6 @@ pub async fn seed_whitelist_user(state: &AppState, email: &str, allowed_ips: &[&
     user
 }
 
-/// Insère un compte administrateur (rôle admin sur portail_admin) — remplace
-/// l'ancien super-admin global supprimé. Le compte est actif.
 pub async fn seed_admin(state: &AppState, email: &str) -> User {
     let mut user = User::new(
         email,
@@ -160,8 +146,6 @@ pub async fn seed_admin(state: &AppState, email: &str) -> User {
     user
 }
 
-/// Active un compte fraîchement inscrit (créé « en attente de validation »)
-/// par une mise à jour directe, en attendant l'endpoint d'administration (US-8.2).
 pub async fn activate_user(db: &Database, email: &str) {
     db.collection::<mongodb::bson::Document>("users")
         .update_one(
@@ -172,7 +156,6 @@ pub async fn activate_user(db: &Database, email: &str) {
         .unwrap();
 }
 
-/// Insère un rôle (nom) dans le catalogue (US-8.3), prérequis à toute attribution.
 pub async fn seed_role(state: &AppState, name: &str) {
     let role = ch_api_authenticator::domain::role::Role::new(name);
     state.roles.insert(&role).await.unwrap();
@@ -185,18 +168,16 @@ pub fn roles(entries: &[(&str, &str)]) -> HashMap<String, Vec<String>> {
         .collect()
 }
 
-/// Réponse HTTP dépouillée pour les assertions.
 pub struct TestResponse {
     pub status: StatusCode,
-    /// Premier Set-Cookie (le cookie d'access token, posé en premier).
+
     pub set_cookie: Option<String>,
-    /// Tous les Set-Cookie (access + refresh depuis l'US-19).
+
     pub set_cookies: Vec<String>,
     pub correlation_id: Option<String>,
     pub body: serde_json::Value,
 }
 
-/// POST JSON avec headers optionnels.
 pub async fn post_json(
     app: Router,
     path: &str,
@@ -210,7 +191,6 @@ pub async fn post_json(
     send(app, request.body(Body::from(body.to_string())).unwrap()).await
 }
 
-/// GET avec headers optionnels.
 pub async fn get(app: Router, path: &str, headers: &[(&str, &str)]) -> TestResponse {
     let mut request = Request::get(path);
     for (name, value) in headers {
@@ -244,7 +224,6 @@ async fn send(app: Router, request: Request<Body>) -> TestResponse {
     }
 }
 
-/// Login via l'API et rend l'access token (chemin nominal).
 pub async fn login_token(state: &AppState, email: &str) -> String {
     login_token_with(state, email, PASSWORD).await
 }

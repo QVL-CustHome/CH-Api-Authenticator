@@ -1,7 +1,3 @@
-//! Administration des comptes — réservée aux administrateurs du portail
-//! d'administration (super-admin global ou rôle `admin` sur `portail_admin`,
-//! US-20 / US-8.2). Chaque action est tracée avec l'identifiant de l'admin.
-
 use crate::domain::user::AccountStatus;
 use crate::error::AppError;
 use crate::handlers::me::{MeResponse, profile};
@@ -25,9 +21,9 @@ const MAX_LIMIT: i64 = 100;
 pub struct ListQuery {
     pub page: Option<u64>,
     pub limit: Option<i64>,
-    /// Filtre par email exact (normalisé lowercase).
+
     pub email: Option<String>,
-    /// Filtre par état : `active` / `pending_validation` / `disabled` (US-8.2).
+
     pub status: Option<String>,
 }
 
@@ -39,7 +35,6 @@ pub struct UserListResponse {
     pub total: u64,
 }
 
-/// `GET /users?page&limit&email` → liste paginée, sans `password_hash`.
 pub async fn list_users(
     State(state): State<AppState>,
     PortalAdmin(_admin): PortalAdmin,
@@ -67,7 +62,6 @@ pub async fn list_users(
     }))
 }
 
-/// `GET /users/pending` → comptes en attente de validation (alerte dashboard, US-8.2).
 pub async fn list_pending(
     State(state): State<AppState>,
     PortalAdmin(_admin): PortalAdmin,
@@ -99,7 +93,6 @@ pub struct UpdateRolesRequest {
     pub roles: Vec<String>,
 }
 
-/// `PUT /users/{id}/roles` → remplace la liste des rôles (globaux).
 pub async fn update_roles(
     State(state): State<AppState>,
     PortalAdmin(admin): PortalAdmin,
@@ -108,14 +101,12 @@ pub async fn update_roles(
 ) -> Result<Json<MeResponse>, AppError> {
     let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
 
-    // Un nom de rôle vide est interdit.
     if request.roles.iter().any(|role| role.trim().is_empty()) {
         return Err(AppError::Validation(
             "les rôles ne peuvent pas être vides".to_string(),
         ));
     }
 
-    // US-8.3 : chaque rôle attribué doit exister dans le catalogue (par nom).
     for role in &request.roles {
         let exists = state.roles.exists(role).await.map_err(|e| {
             tracing::error!(error = %e, "Vérification du rôle en échec");
@@ -141,7 +132,6 @@ pub async fn update_roles(
         return Err(AppError::NotFound("utilisateur inconnu"));
     }
 
-    // Audit : qui a attribué quoi à qui.
     tracing::info!(
         admin_id = %admin.sub,
         target_id = %user_id,
@@ -159,7 +149,6 @@ pub struct UpdateWhitelistRequest {
     pub allowed_ips: Vec<String>,
 }
 
-/// `PUT /users/{id}/whitelist` → active/désactive la restriction IP.
 pub async fn update_whitelist(
     State(state): State<AppState>,
     PortalAdmin(admin): PortalAdmin,
@@ -208,7 +197,6 @@ pub struct UpdateStatusRequest {
     pub status: AccountStatus,
 }
 
-/// `PUT /users/{id}/status` → active / désactive / remet en attente un compte (US-8.2).
 pub async fn update_status(
     State(state): State<AppState>,
     PortalAdmin(admin): PortalAdmin,
@@ -248,7 +236,6 @@ pub struct UpdateUserRequest {
     pub email: String,
 }
 
-/// `PUT /users/{id}` → modifie le nom et l'email d'un compte (US-8.x).
 pub async fn update_user(
     State(state): State<AppState>,
     PortalAdmin(admin): PortalAdmin,
@@ -290,7 +277,6 @@ pub async fn update_user(
     load_profile(&state, user_id).await
 }
 
-/// `GET /users/{id}` → profil d'un compte (US-8.2).
 pub async fn get_user(
     State(state): State<AppState>,
     PortalAdmin(_admin): PortalAdmin,
@@ -300,7 +286,6 @@ pub async fn get_user(
     load_profile(&state, user_id).await
 }
 
-/// `DELETE /users/{id}` → supprime définitivement un compte (US-8.2).
 pub async fn delete_user(
     State(state): State<AppState>,
     PortalAdmin(admin): PortalAdmin,
@@ -325,7 +310,6 @@ pub struct UpdatePasswordRequest {
     pub password: String,
 }
 
-/// `PUT /users/{id}/password` → réinitialise le mot de passe d'un compte (US-8.x).
 pub async fn update_password(
     State(state): State<AppState>,
     PortalAdmin(admin): PortalAdmin,
@@ -355,7 +339,6 @@ pub async fn update_password(
     Ok(StatusCode::NO_CONTENT)
 }
 
-/// Convertit le filtre de statut de la query string en [`AccountStatus`].
 fn parse_status(raw: &str) -> Result<AccountStatus, AppError> {
     match raw {
         "active" => Ok(AccountStatus::Active),
@@ -365,7 +348,6 @@ fn parse_status(raw: &str) -> Result<AccountStatus, AppError> {
     }
 }
 
-/// Un id illisible est traité comme un utilisateur inconnu (404).
 fn parse_target_id(id: &str) -> Result<ObjectId, AppError> {
     ObjectId::parse_str(id).map_err(|_| AppError::NotFound("utilisateur inconnu"))
 }

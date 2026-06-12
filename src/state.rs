@@ -1,5 +1,3 @@
-//! État partagé de l'application, injecté dans les handlers Axum.
-
 use crate::config::Settings;
 use crate::repository::refresh_tokens::RefreshTokenRepository;
 use crate::repository::reset_tokens::ResetTokenRepository;
@@ -13,17 +11,17 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct AppState {
     pub settings: Arc<Settings>,
-    /// Handle base : ping du health check (US-07).
+
     pub db: Database,
     pub users: UserRepository,
-    /// Catalogue des rôles attribuables par portail (US-8.3).
+
     pub roles: RoleRepository,
-    /// Tokens one-time de réinitialisation de mot de passe (US-17/18).
+
     pub reset_tokens: ResetTokenRepository,
-    /// Refresh tokens à rotation (US-19).
+
     pub refresh_tokens: RefreshTokenRepository,
     pub jwt: Arc<JwtService>,
-    /// Envoi des emails (US-16) — construit en amont (fail-fast au démarrage).
+
     pub mailer: Arc<Mailer>,
 }
 

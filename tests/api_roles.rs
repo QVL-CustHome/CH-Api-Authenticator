@@ -1,5 +1,3 @@
-//! US-8.3 — Catalogue des rôles (un rôle = un nom) : CRUD et validation à l'attribution.
-
 mod common;
 
 use axum::body::Body;
@@ -171,11 +169,9 @@ async fn attribution_refusee_si_role_absent_du_catalogue() {
     let target = user.id.unwrap().to_hex();
     let body = r#"{"roles": ["fantome"]}"#;
 
-    // Rôle absent du catalogue → 400.
     let absent = put_auth(&state, &format!("/users/{target}/roles"), &token, body).await;
     assert_eq!(absent, StatusCode::BAD_REQUEST);
 
-    // Après création du nom dans le catalogue, l'attribution est acceptée.
     post_json(
         router(state.clone()),
         "/roles",

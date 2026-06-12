@@ -1,6 +1,3 @@
-//! US-07 — Health check : ok/degraded selon MongoDB, /validate insensible
-//! à une panne MongoDB (stateless), accès sans authentification.
-
 mod common;
 
 use axum::http::StatusCode;
@@ -16,7 +13,6 @@ async fn health_ok_quand_mongo_repond() {
     let db = test_db().await;
     let state = test_state(&db).await;
 
-    // Sans authentification.
     let response = get(router(state), "/health", &[]).await;
 
     assert_eq!(response.status, StatusCode::OK);
@@ -48,7 +44,6 @@ async fn validate_pleinement_fonctionnel_quand_mongo_down() {
     let db = broken_db();
     let state = state_for_db(&db, false, HashMap::new());
 
-    // Token signé avec le secret du service : /validate n'a pas besoin de la base.
     let mut user = User::new(
         "stateless@test.fr",
         "$argon2id$hash".to_string(),

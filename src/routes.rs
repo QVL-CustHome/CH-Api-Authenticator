@@ -1,6 +1,3 @@
-//! Déclaration du routeur Axum.
-//! Couverture HTTP de bout en bout : voir la suite d'intégration `tests/api_*.rs`.
-
 use crate::handlers;
 use crate::middleware::tracing::correlation_and_access_log;
 use crate::state::AppState;
@@ -20,12 +17,12 @@ pub fn router(state: AppState) -> Router {
         .route("/password/forgot", post(handlers::password::forgot))
         .route("/password/reset", post(handlers::password::reset))
         .route("/password", put(handlers::password::change))
-        // Endpoints protégés par l'auth interne (US-13).
+
         .route(
             "/me",
             get(handlers::me::get_me).put(handlers::me::update_me),
         )
-        // Administration — garde PortalAdmin (US-20 / US-8.2).
+
         .route("/users", get(handlers::admin::list_users))
         .route("/users/pending", get(handlers::admin::list_pending))
         .route(
@@ -44,13 +41,13 @@ pub fn router(state: AppState) -> Router {
             "/users/{id}/whitelist",
             put(handlers::admin::update_whitelist),
         )
-        // Catalogue des rôles — garde PortalAdmin (US-8.3).
+
         .route(
             "/roles",
             get(handlers::roles::list_roles).post(handlers::roles::create_role),
         )
         .route("/roles/{id}", delete(handlers::roles::delete_role))
-        // US-06 : correlation id + log d'accès sur toutes les routes.
+
         .layer(from_fn(correlation_and_access_log))
         .with_state(state)
 }

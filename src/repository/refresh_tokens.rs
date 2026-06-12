@@ -1,10 +1,3 @@
-//! Collection `refresh_tokens` (US-19).
-//!
-//! Chaque login ouvre une « famille » de tokens ; chaque rotation révoque
-//! le token présenté et en émet un nouveau dans la même famille. La
-//! réutilisation d'un token déjà tourné trahit un vol : toute la famille
-//! est révoquée.
-
 use mongodb::bson::oid::ObjectId;
 use mongodb::bson::{DateTime, doc};
 use mongodb::options::IndexOptions;
@@ -22,13 +15,12 @@ pub struct RefreshToken {
     pub created_at: DateTime,
 }
 
-/// Résultat de la tentative de rotation d'un token présenté.
 pub enum RotationOutcome {
-    /// Token valide, marqué révoqué de façon atomique : la rotation continue.
+
     Rotated(RefreshToken),
-    /// Token déjà tourné : réutilisation suspecte (vol probable).
+
     ReuseDetected(RefreshToken),
-    /// Token inconnu ou expiré.
+
     Unknown,
 }
 
@@ -44,8 +36,6 @@ impl RefreshTokenRepository {
         }
     }
 
-    /// Index TTL (purge à `expires_at`), hash unique, accès par famille
-    /// et par utilisateur. Idempotent.
     pub async fn ensure_indexes(&self) -> Result<(), mongodb::error::Error> {
         let ttl = IndexModel::builder()
             .keys(doc! { "expires_at": 1 })
@@ -89,7 +79,6 @@ impl RefreshTokenRepository {
         Ok(())
     }
 
-    /// Tente de consommer le token pour une rotation, de façon atomique.
     pub async fn consume_for_rotation(
         &self,
         token_hash: &str,
@@ -109,7 +98,6 @@ impl RefreshTokenRepository {
             return Ok(RotationOutcome::Rotated(token));
         }
 
-        // Le token existe mais était déjà révoqué → réutilisation suspecte.
         match self
             .collection
             .find_one(doc! { "token_hash": token_hash })
@@ -120,7 +108,6 @@ impl RefreshTokenRepository {
         }
     }
 
-    /// Révoque tous les tokens d'une famille (vol suspecté ou logout).
     pub async fn revoke_family(&self, family_id: ObjectId) -> Result<u64, mongodb::error::Error> {
         let result = self
             .collection
@@ -132,7 +119,6 @@ impl RefreshTokenRepository {
         Ok(result.modified_count)
     }
 
-    /// Révoque toutes les sessions d'un utilisateur (changement/reset de mdp).
     pub async fn revoke_all_for_user(
         &self,
         user_id: ObjectId,
@@ -147,7 +133,6 @@ impl RefreshTokenRepository {
         Ok(result.modified_count)
     }
 
-    /// Recherche par hash, sans le consommer (logout).
     pub async fn find_by_hash(
         &self,
         token_hash: &str,
