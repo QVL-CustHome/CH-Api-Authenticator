@@ -5,7 +5,7 @@ use ch_api_authenticator::routes::router;
 use common::*;
 use std::collections::HashMap;
 
-const LOGIN_BODY: &str = r#"{"email": "martin@test.fr", "password": "bon-mot-de-passe"}"#;
+const LOGIN_BODY: &str = r#"{"email": "martin@test.fr", "password": "Bon-Mot-De-Passe1"}"#;
 
 async fn login_session(
     state: &ch_api_authenticator::state::AppState,
@@ -218,7 +218,7 @@ async fn changement_et_reset_de_mot_de_passe_revoquent_les_refresh() {
                 .header(header::CONTENT_TYPE, "application/json")
                 .header(header::AUTHORIZATION, format!("Bearer {access}"))
                 .body(Body::from(format!(
-                    r#"{{"current_password": "{PASSWORD}", "new_password": "nouveau-mdp-solide"}}"#
+                    r#"{{"current_password": "{PASSWORD}", "new_password": "Nouveau-Mdp-Solide1"}}"#
                 )))
                 .unwrap(),
         )
@@ -234,7 +234,7 @@ async fn changement_et_reset_de_mot_de_passe_revoquent_les_refresh() {
     let login2 = post_json(
         router(state.clone()),
         "/login",
-        r#"{"email": "martin@test.fr", "password": "nouveau-mdp-solide"}"#,
+        r#"{"email": "martin@test.fr", "password": "Nouveau-Mdp-Solide1"}"#,
         &[],
     )
     .await;
@@ -269,7 +269,7 @@ async fn changement_et_reset_de_mot_de_passe_revoquent_les_refresh() {
     let reset = post_json(
         router(state.clone()),
         "/password/reset",
-        &format!(r#"{{"token": "{token}", "new_password": "encore-un-autre-mdp"}}"#),
+        &format!(r#"{{"token": "{token}", "new_password": "Encore-Un-Autre-Mdp1"}}"#),
         &[],
     )
     .await;

@@ -21,7 +21,7 @@ use std::sync::{Arc, Mutex};
 use tower::ServiceExt;
 
 pub const JWT_SECRET: &str = "un-secret-de-test-suffisamment-long!!!!!";
-pub const PASSWORD: &str = "bon-mot-de-passe";
+pub const PASSWORD: &str = "Bon-Mot-De-Passe1";
 
 pub async fn test_db() -> Database {
     let client = mongodb::Client::with_uri_str("mongodb://localhost:27017")
@@ -157,7 +157,8 @@ pub async fn activate_user(db: &Database, email: &str) {
 }
 
 pub async fn seed_role(state: &AppState, name: &str) {
-    let role = ch_api_authenticator::domain::role::Role::new(name);
+    use ch_api_authenticator::domain::role::{Portal, Role};
+    let role = Role::sub_role(name, Portal::Admin);
     state.roles.insert(&role).await.unwrap();
 }
 

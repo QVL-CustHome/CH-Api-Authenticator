@@ -3,7 +3,7 @@ use crate::error::AppError;
 use crate::repository::users::RepositoryError;
 use crate::services::password;
 use crate::state::AppState;
-use crate::validation::{self, PASSWORD_MIN_CHARS};
+use crate::validation;
 use axum::Json;
 use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
@@ -19,10 +19,7 @@ pub struct RegisterRequest {
     pub name: String,
     #[validate(email(message = "format d'email invalide"))]
     pub email: String,
-    #[validate(length(
-        min = "PASSWORD_MIN_CHARS",
-        message = "mot de passe trop court (minimum 8 caractÃ¨res)"
-    ))]
+    #[validate(custom(function = "crate::validation::validate_password_strength"))]
     pub password: String,
 }
 
@@ -31,7 +28,7 @@ pub async fn register(
     payload: Result<Json<RegisterRequest>, JsonRejection>,
 ) -> Result<impl IntoResponse, AppError> {
 
-    let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
+    let Json(request) = payload?;
 
     validation::check(&request)?;
     if request.name.trim().is_empty() {

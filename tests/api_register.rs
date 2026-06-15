@@ -13,7 +13,7 @@ async fn inscription_valide_201_avec_hash_et_roles_par_defaut() {
     let response = post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Nouveau", "email": "Nouveau@Test.FR", "password": "motdepasse"}"#,
+        r#"{"name": "Nouveau", "email": "Nouveau@Test.FR", "password": "Motdepasse1!"}"#,
         &[],
     )
     .await;
@@ -42,7 +42,7 @@ async fn roles_du_body_ignores() {
     let response = post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Pirate", "email": "pirate@test.fr", "password": "motdepasse", "roles": {"portail": "admin"}, "is_super_admin": true}"#,
+        r#"{"name": "Pirate", "email": "pirate@test.fr", "password": "Motdepasse1!", "roles": {"portail": "admin"}, "is_super_admin": true}"#,
         &[],
     )
     .await;
@@ -68,7 +68,7 @@ async fn email_deja_utilise_409() {
     let response = post_json(
         router(state),
         "/register",
-        r#"{"name": "Double", "email": "Double@Test.FR", "password": "motdepasse"}"#,
+        r#"{"name": "Double", "email": "Double@Test.FR", "password": "Motdepasse1!"}"#,
         &[],
     )
     .await;
@@ -85,11 +85,11 @@ async fn payloads_invalides_400() {
     let state = test_state(&db).await;
 
     for body in [
-        r#"{"name": "X", "email": "pas-un-email", "password": "motdepasse"}"#,
+        r#"{"name": "X", "email": "pas-un-email", "password": "Motdepasse1!"}"#,
         r#"{"name": "X", "email": "ok@test.fr", "password": "court"}"#,
         r#"{"name": "X", "email": "ok@test.fr"}"#,
-        r#"{"email": "ok@test.fr", "password": "motdepasse"}"#,
-        r#"{"name": "  ", "email": "ok2@test.fr", "password": "motdepasse"}"#,
+        r#"{"email": "ok@test.fr", "password": "Motdepasse1!"}"#,
+        r#"{"name": "  ", "email": "ok2@test.fr", "password": "Motdepasse1!"}"#,
         "pas du json",
     ] {
         let response = post_json(router(state.clone()), "/register", body, &[]).await;
@@ -110,7 +110,7 @@ async fn inscription_cree_un_compte_en_attente_de_validation() {
     let response = post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Attente", "email": "attente@test.fr", "password": "motdepasse"}"#,
+        r#"{"name": "Attente", "email": "attente@test.fr", "password": "Motdepasse1!"}"#,
         &[],
     )
     .await;

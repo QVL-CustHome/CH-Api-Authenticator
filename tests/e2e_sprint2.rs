@@ -59,7 +59,7 @@ async fn cycle_de_vie_complet_d_un_compte() {
     let register = post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Vie", "email": "vie@custhome.fr", "password": "premier-mdp-solide"}"#,
+        r#"{"name": "Vie", "email": "vie@custhome.fr", "password": "Premier-Mdp-Solide1"}"#,
         &[],
     )
     .await;
@@ -82,7 +82,7 @@ async fn cycle_de_vie_complet_d_un_compte() {
     let login = post_json(
         router(state.clone()),
         "/login",
-        r#"{"email": "vie@custhome.fr", "password": "premier-mdp-solide"}"#,
+        r#"{"email": "vie@custhome.fr", "password": "Premier-Mdp-Solide1"}"#,
         &[],
     )
     .await;
@@ -121,7 +121,7 @@ async fn cycle_de_vie_complet_d_un_compte() {
         &state,
         "/password",
         &access2,
-        r#"{"current_password": "premier-mdp-solide", "new_password": "second-mdp-solide"}"#,
+        r#"{"current_password": "Premier-Mdp-Solide1", "new_password": "Second-Mdp-Solide1"}"#,
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -137,7 +137,7 @@ async fn cycle_de_vie_complet_d_un_compte() {
     let relogin = post_json(
         router(state.clone()),
         "/login",
-        r#"{"email": "vie@custhome.fr", "password": "second-mdp-solide"}"#,
+        r#"{"email": "vie@custhome.fr", "password": "Second-Mdp-Solide1"}"#,
         &[],
     )
     .await;
@@ -172,7 +172,7 @@ async fn parcours_reset_integral() {
     post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Oubli", "email": "oubli@custhome.fr", "password": "mdp-oublie-bientot"}"#,
+        r#"{"name": "Oubli", "email": "oubli@custhome.fr", "password": "Mdp-Oublie-Bientot1"}"#,
         &[],
     )
     .await;
@@ -181,7 +181,7 @@ async fn parcours_reset_integral() {
     let login = post_json(
         router(state.clone()),
         "/login",
-        r#"{"email": "oubli@custhome.fr", "password": "mdp-oublie-bientot"}"#,
+        r#"{"email": "oubli@custhome.fr", "password": "Mdp-Oublie-Bientot1"}"#,
         &[],
     )
     .await;
@@ -218,17 +218,17 @@ async fn parcours_reset_integral() {
     let reset = post_json(
         router(state.clone()),
         "/password/reset",
-        &format!(r#"{{"token": "{token}", "new_password": "mdp-tout-neuf"}}"#),
+        &format!(r#"{{"token": "{token}", "new_password": "Mdp-Tout-Neuf1"}}"#),
         &[],
     )
     .await;
     assert_eq!(reset.status, StatusCode::OK);
 
-    login_token_with(&state, "oubli@custhome.fr", "mdp-tout-neuf").await;
+    login_token_with(&state, "oubli@custhome.fr", "Mdp-Tout-Neuf1").await;
     let ancien = post_json(
         router(state.clone()),
         "/login",
-        r#"{"email": "oubli@custhome.fr", "password": "mdp-oublie-bientot"}"#,
+        r#"{"email": "oubli@custhome.fr", "password": "Mdp-Oublie-Bientot1"}"#,
         &[],
     )
     .await;
@@ -260,7 +260,7 @@ async fn whitelist_administree_de_bout_en_bout() {
     let register = post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Fixe", "email": "fixe@custhome.fr", "password": "mdp-poste-fixe!"}"#,
+        r#"{"name": "Fixe", "email": "fixe@custhome.fr", "password": "Mdp-Poste-Fixe1!"}"#,
         &[],
     )
     .await;
@@ -284,7 +284,7 @@ async fn whitelist_administree_de_bout_en_bout() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
-    let login_body = r#"{"email": "fixe@custhome.fr", "password": "mdp-poste-fixe!"}"#;
+    let login_body = r#"{"email": "fixe@custhome.fr", "password": "Mdp-Poste-Fixe1!"}"#;
 
     let hors = post_json(router(state.clone()), "/login", login_body, &[]).await;
     assert_eq!(hors.status, StatusCode::FORBIDDEN);

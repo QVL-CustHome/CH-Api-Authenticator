@@ -1,9 +1,7 @@
 use ch_api_authenticator::config;
-use ch_api_authenticator::domain::role::Role;
 use ch_api_authenticator::domain::user::User;
 use ch_api_authenticator::middleware::auth::ADMIN_ROLE;
 use ch_api_authenticator::repository;
-use ch_api_authenticator::repository::roles::RoleError;
 use ch_api_authenticator::repository::users::RepositoryError;
 use ch_api_authenticator::routes;
 use ch_api_authenticator::services;
@@ -56,6 +54,12 @@ async fn main() {
         std::process::exit(1);
     }
 
+    if let Err(e) = state.roles.ensure_portal_roles().await {
+        tracing::error!(error = %e, "Seed des rôles portail en échec");
+        eprintln!("Démarrage impossible — seed des rôles portail en échec : {e}");
+        std::process::exit(1);
+    }
+
     if let Err(e) = seed_admin(&state).await {
         tracing::error!(error = %e, "Seed de l'administrateur en échec");
         eprintln!("Démarrage impossible — seed de l'administrateur en échec : {e}");
@@ -87,12 +91,6 @@ async fn seed_admin(state: &AppState) -> Result<(), String> {
         tracing::info!("Seed admin ignoré : ADMIN_EMAIL / ADMIN_PASSWORD absents");
         return Ok(());
     };
-
-    let role = Role::new(ADMIN_ROLE);
-    match state.roles.insert(&role).await {
-        Ok(_) | Err(RoleError::Duplicate) => {}
-        Err(RoleError::Database(e)) => return Err(e.to_string()),
-    }
 
     match state
         .users

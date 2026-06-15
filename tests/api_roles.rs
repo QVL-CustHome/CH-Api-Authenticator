@@ -55,7 +55,7 @@ async fn crud_complet_des_roles() {
     let create = post_json(
         router(state.clone()),
         "/roles",
-        r#"{"name": "editor"}"#,
+        r#"{"name": "editor", "portal": "admin"}"#,
         &[("Authorization", &auth)],
     )
     .await;
@@ -91,7 +91,7 @@ async fn role_duplique_409_et_nom_vide_400() {
     let first = post_json(
         router(state.clone()),
         "/roles",
-        r#"{"name": "editor"}"#,
+        r#"{"name": "editor", "portal": "admin"}"#,
         &[("Authorization", &auth)],
     )
     .await;
@@ -100,7 +100,7 @@ async fn role_duplique_409_et_nom_vide_400() {
     let dup = post_json(
         router(state.clone()),
         "/roles",
-        r#"{"name": "editor"}"#,
+        r#"{"name": "editor", "portal": "admin"}"#,
         &[("Authorization", &auth)],
     )
     .await;
@@ -109,7 +109,7 @@ async fn role_duplique_409_et_nom_vide_400() {
     let vide = post_json(
         router(state),
         "/roles",
-        r#"{"name": "  "}"#,
+        r#"{"name": "  ", "portal": "admin"}"#,
         &[("Authorization", &auth)],
     )
     .await;
@@ -159,6 +159,31 @@ async fn suppression_role_inconnu_404() {
 }
 
 #[tokio::test]
+async fn role_portail_non_supprimable_403() {
+    let db = test_db().await;
+    let state = test_state(&db).await;
+    state.roles.ensure_portal_roles().await.unwrap();
+    seed_admin(&state, "root@test.fr").await;
+    let token = login_token(&state, "root@test.fr").await;
+    let auth = format!("Bearer {token}");
+
+    let list = get(router(state.clone()), "/roles", &[("Authorization", &auth)]).await;
+    let admin_portal = list
+        .body
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["name"] == "admin" && r["kind"] == "portal")
+        .expect("le rôle portail admin doit exister");
+    let portal_id = admin_portal["id"].as_str().unwrap();
+
+    let status = delete_auth(&state, &format!("/roles/{portal_id}"), &token).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    db.drop().await.unwrap();
+}
+
+#[tokio::test]
 async fn attribution_refusee_si_role_absent_du_catalogue() {
     let db = test_db().await;
     let state = test_state(&db).await;
@@ -175,7 +200,7 @@ async fn attribution_refusee_si_role_absent_du_catalogue() {
     post_json(
         router(state.clone()),
         "/roles",
-        r#"{"name": "fantome"}"#,
+        r#"{"name": "fantome", "portal": "admin"}"#,
         &[("Authorization", &auth)],
     )
     .await;
