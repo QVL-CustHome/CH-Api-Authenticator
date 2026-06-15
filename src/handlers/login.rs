@@ -31,7 +31,7 @@ pub async fn login(
     headers: HeaderMap,
     payload: Result<Json<LoginRequest>, JsonRejection>,
 ) -> Result<Session, AppError> {
-    let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
+    let Json(request) = payload?;
     validation::check(&request)?;
 
     let user = state

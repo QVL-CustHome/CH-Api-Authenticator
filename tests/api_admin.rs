@@ -248,7 +248,7 @@ async fn whitelist_activee_par_l_admin_s_applique_au_login() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["whitelist_only"], true);
 
-    let login_body = r#"{"email": "martin@test.fr", "password": "bon-mot-de-passe"}"#;
+    let login_body = r#"{"email": "martin@test.fr", "password": "Bon-Mot-De-Passe1"}"#;
     let sans_ip = post_json(router(state.clone()), "/login", login_body, &[]).await;
     assert_eq!(sans_ip.status, StatusCode::FORBIDDEN);
     assert_eq!(sans_ip.body["error"], "device_not_allowed");
@@ -321,12 +321,12 @@ async fn activation_desactivation_via_status_pilote_le_login() {
     let register = post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Pending", "email": "pending@test.fr", "password": "bon-mot-de-passe"}"#,
+        r#"{"name": "Pending", "email": "pending@test.fr", "password": "Bon-Mot-De-Passe1"}"#,
         &[],
     )
     .await;
     let target = register.body["user_id"].as_str().unwrap().to_string();
-    let login_body = r#"{"email": "pending@test.fr", "password": "bon-mot-de-passe"}"#;
+    let login_body = r#"{"email": "pending@test.fr", "password": "Bon-Mot-De-Passe1"}"#;
 
     let avant = post_json(router(state.clone()), "/login", login_body, &[]).await;
     assert_eq!(avant.status, StatusCode::FORBIDDEN);
@@ -373,7 +373,7 @@ async fn liste_des_comptes_en_attente() {
         post_json(
             router(state.clone()),
             "/register",
-            &format!(r#"{{"name": "Test", "email": "{email}", "password": "bon-mot-de-passe"}}"#),
+            &format!(r#"{{"name": "Test", "email": "{email}", "password": "Bon-Mot-De-Passe1"}}"#),
             &[],
         )
         .await;
@@ -469,7 +469,7 @@ async fn suppression_compte_empeche_le_login() {
     let login = post_json(
         router(state.clone()),
         "/login",
-        r#"{"email": "asupprimer@test.fr", "password": "bon-mot-de-passe"}"#,
+        r#"{"email": "asupprimer@test.fr", "password": "Bon-Mot-De-Passe1"}"#,
         &[],
     )
     .await;
@@ -503,7 +503,7 @@ async fn reinitialisation_mot_de_passe_par_admin() {
         &state,
         &format!("/users/{target}/password"),
         &admin,
-        r#"{"password": "nouveau-mot-de-passe"}"#,
+        r#"{"password": "Nouveau-Mot-De-Passe1"}"#,
     )
     .await;
     assert_eq!(ok, StatusCode::NO_CONTENT);
@@ -511,7 +511,7 @@ async fn reinitialisation_mot_de_passe_par_admin() {
     let ancien = post_json(
         router(state.clone()),
         "/login",
-        r#"{"email": "user@test.fr", "password": "bon-mot-de-passe"}"#,
+        r#"{"email": "user@test.fr", "password": "Bon-Mot-De-Passe1"}"#,
         &[],
     )
     .await;
@@ -520,7 +520,7 @@ async fn reinitialisation_mot_de_passe_par_admin() {
     let nouveau = post_json(
         router(state),
         "/login",
-        r#"{"email": "user@test.fr", "password": "nouveau-mot-de-passe"}"#,
+        r#"{"email": "user@test.fr", "password": "Nouveau-Mot-De-Passe1"}"#,
         &[],
     )
     .await;

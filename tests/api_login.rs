@@ -7,8 +7,8 @@ use common::*;
 use mongodb::bson::doc;
 use std::collections::HashMap;
 
-const LOGIN_BODY: &str = r#"{"email": "martin@test.fr", "password": "bon-mot-de-passe"}"#;
-const WHITELIST_BODY: &str = r#"{"email": "secure@test.fr", "password": "bon-mot-de-passe"}"#;
+const LOGIN_BODY: &str = r#"{"email": "martin@test.fr", "password": "Bon-Mot-De-Passe1"}"#;
+const WHITELIST_BODY: &str = r#"{"email": "secure@test.fr", "password": "Bon-Mot-De-Passe1"}"#;
 
 #[tokio::test]
 async fn login_valide_200_token_et_cookie() {
@@ -19,7 +19,7 @@ async fn login_valide_200_token_et_cookie() {
     let response = post_json(
         router(state.clone()),
         "/login",
-        r#"{"email": "Martin@Test.FR", "password": "bon-mot-de-passe"}"#,
+        r#"{"email": "Martin@Test.FR", "password": "Bon-Mot-De-Passe1"}"#,
         &[],
     )
     .await;
@@ -226,7 +226,7 @@ async fn login_compte_en_attente_refuse_403() {
     post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Attente", "email": "attente@test.fr", "password": "bon-mot-de-passe"}"#,
+        r#"{"name": "Attente", "email": "attente@test.fr", "password": "Bon-Mot-De-Passe1"}"#,
         &[],
     )
     .await;
@@ -234,7 +234,7 @@ async fn login_compte_en_attente_refuse_403() {
     let response = post_json(
         router(state),
         "/login",
-        r#"{"email": "attente@test.fr", "password": "bon-mot-de-passe"}"#,
+        r#"{"email": "attente@test.fr", "password": "Bon-Mot-De-Passe1"}"#,
         &[],
     )
     .await;
@@ -263,7 +263,7 @@ async fn login_compte_desactive_refuse_403() {
     let response = post_json(
         router(state),
         "/login",
-        r#"{"email": "off@test.fr", "password": "bon-mot-de-passe"}"#,
+        r#"{"email": "off@test.fr", "password": "Bon-Mot-De-Passe1"}"#,
         &[],
     )
     .await;
@@ -282,7 +282,7 @@ async fn login_apres_validation_200() {
     post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Valide", "email": "valide@test.fr", "password": "bon-mot-de-passe"}"#,
+        r#"{"name": "Valide", "email": "valide@test.fr", "password": "Bon-Mot-De-Passe1"}"#,
         &[],
     )
     .await;
@@ -291,7 +291,7 @@ async fn login_apres_validation_200() {
     let response = post_json(
         router(state),
         "/login",
-        r#"{"email": "valide@test.fr", "password": "bon-mot-de-passe"}"#,
+        r#"{"email": "valide@test.fr", "password": "Bon-Mot-De-Passe1"}"#,
         &[],
     )
     .await;

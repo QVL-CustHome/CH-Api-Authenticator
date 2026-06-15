@@ -43,7 +43,7 @@ pub async fn update_me(
     AuthUser(claims): AuthUser,
     payload: Result<Json<UpdateMeRequest>, JsonRejection>,
 ) -> Result<Json<MeResponse>, AppError> {
-    let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
+    let Json(request) = payload?;
     request
         .validate()
         .map_err(|_| AppError::Validation("format d'email invalide".to_string()))?;

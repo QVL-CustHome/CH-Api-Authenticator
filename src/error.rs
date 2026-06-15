@@ -1,4 +1,5 @@
 use axum::Json;
+use axum::extract::rejection::JsonRejection;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde_json::json;
@@ -32,6 +33,22 @@ pub enum AppError {
     DeviceNotAllowed,
     #[error("erreur interne")]
     Internal,
+}
+
+impl From<JsonRejection> for AppError {
+    fn from(rejection: JsonRejection) -> Self {
+        let message = match rejection {
+            JsonRejection::JsonDataError(_) => {
+                "Données invalides : un ou plusieurs champs sont incorrects ou manquants."
+            }
+            JsonRejection::JsonSyntaxError(_) => "Le corps de la requête n'est pas un JSON valide.",
+            JsonRejection::MissingJsonContentType(_) => {
+                "En-tête « Content-Type: application/json » manquant."
+            }
+            _ => "Requête invalide.",
+        };
+        AppError::Validation(message.to_string())
+    }
 }
 
 impl IntoResponse for AppError {

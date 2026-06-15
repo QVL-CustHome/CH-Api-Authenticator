@@ -7,7 +7,7 @@ use ch_api_authenticator::routes::router;
 use common::*;
 use std::collections::HashMap;
 
-const WHITELIST_BODY: &str = r#"{"email": "secure@test.fr", "password": "bon-mot-de-passe"}"#;
+const WHITELIST_BODY: &str = r#"{"email": "secure@test.fr", "password": "Bon-Mot-De-Passe1"}"#;
 
 #[tokio::test]
 async fn token_valide_200_role_global_quel_que_soit_le_portail() {

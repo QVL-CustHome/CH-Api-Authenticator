@@ -2,7 +2,7 @@ use crate::error::AppError;
 use crate::middleware::auth::AuthUser;
 use crate::services::{password, secure_token};
 use crate::state::AppState;
-use crate::validation::{self, PASSWORD_MIN_CHARS};
+use crate::validation;
 use axum::Json;
 use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
@@ -24,20 +24,15 @@ pub struct ForgotRequest {
 pub struct ResetRequest {
     #[validate(length(min = 1, message = "token requis"))]
     pub token: String,
-    #[validate(length(
-        min = "PASSWORD_MIN_CHARS",
-        message = "mot de passe trop court (minimum 8 caractères)"
-    ))]
+    #[validate(custom(function = "crate::validation::validate_password_strength"))]
     pub new_password: String,
 }
 
 #[derive(Deserialize, Validate)]
 pub struct ChangePasswordRequest {
+    #[validate(length(min = 1, message = "mot de passe actuel requis"))]
     pub current_password: String,
-    #[validate(length(
-        min = "PASSWORD_MIN_CHARS",
-        message = "mot de passe trop court (minimum 8 caractères)"
-    ))]
+    #[validate(custom(function = "crate::validation::validate_password_strength"))]
     pub new_password: String,
 }
 
@@ -46,7 +41,7 @@ pub async fn change(
     AuthUser(claims): AuthUser,
     payload: Result<Json<ChangePasswordRequest>, JsonRejection>,
 ) -> Result<impl IntoResponse, AppError> {
-    let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
+    let Json(request) = payload?;
     validation::check(&request)?;
 
     let user_id = ObjectId::parse_str(&claims.sub).map_err(|_| AppError::InvalidToken)?;
@@ -92,7 +87,7 @@ pub async fn forgot(
     State(state): State<AppState>,
     payload: Result<Json<ForgotRequest>, JsonRejection>,
 ) -> Result<impl IntoResponse, AppError> {
-    let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
+    let Json(request) = payload?;
     validation::check(&request)?;
 
     if let Some(user) = state
@@ -148,7 +143,7 @@ pub async fn reset(
     State(state): State<AppState>,
     payload: Result<Json<ResetRequest>, JsonRejection>,
 ) -> Result<impl IntoResponse, AppError> {
-    let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
+    let Json(request) = payload?;
 
     validation::check(&request)?;
 

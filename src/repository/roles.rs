@@ -1,4 +1,4 @@
-use crate::domain::role::Role;
+use crate::domain::role::{Portal, Role};
 use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
 use mongodb::options::IndexOptions;
@@ -33,6 +33,24 @@ impl RoleRepository {
             .build();
         self.collection.create_index(index).await?;
         Ok(())
+    }
+
+    pub async fn ensure_portal_roles(&self) -> Result<(), mongodb::error::Error> {
+        self.collection
+            .delete_many(doc! { "portal": { "$nin": ["admin", "drive", "home"] } })
+            .await?;
+        for portal in Portal::ALL {
+            let role = Role::portal_role(portal);
+            match self.insert(&role).await {
+                Ok(_) | Err(RoleError::Duplicate) => {}
+                Err(RoleError::Database(e)) => return Err(e),
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn find_by_id(&self, id: ObjectId) -> Result<Option<Role>, mongodb::error::Error> {
+        self.collection.find_one(doc! { "_id": id }).await
     }
 
     pub async fn insert(&self, role: &Role) -> Result<ObjectId, RoleError> {

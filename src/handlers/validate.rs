@@ -1,3 +1,4 @@
+use crate::domain::role::Portal;
 use crate::error::AppError;
 use crate::handlers::login::CLIENT_IP_HEADER;
 use crate::state::AppState;
@@ -34,7 +35,7 @@ pub async fn validate(
         }
     }
 
-    let _portal = headers
+    let portal = headers
         .get(PORTAL_HEADER)
         .and_then(|v| v.to_str().ok())
         .map(str::trim)
@@ -44,6 +45,13 @@ pub async fn validate(
     if claims.roles.is_empty() {
         return Err(AppError::Forbidden("aucun rôle attribué"));
     }
+
+    if let Some(required) = Portal::from_portal_header(portal) {
+        if !claims.roles.iter().any(|r| r == required.role_name()) {
+            return Err(AppError::Forbidden("accès non autorisé pour ce portail"));
+        }
+    }
+
     let role = claims.roles.join(",");
 
     Ok(Json(ValidateResponse {

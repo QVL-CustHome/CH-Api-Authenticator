@@ -5,14 +5,35 @@ use crate::middleware::auth::PortalAdmin;
 use crate::repository::users::RepositoryError;
 use crate::services::{password, whitelist};
 use crate::state::AppState;
-use crate::validation::PASSWORD_MIN_CHARS;
+use crate::validation;
 use axum::Json;
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
-use validator::Validate;
+use std::borrow::Cow;
+use validator::{Validate, ValidationError};
+
+fn validate_role_names(roles: &[String]) -> Result<(), ValidationError> {
+    if roles.iter().any(|role| role.trim().is_empty()) {
+        let mut error = ValidationError::new("role_empty");
+        error.message = Some(Cow::Borrowed("les rôles ne peuvent pas être vides"));
+        return Err(error);
+    }
+    Ok(())
+}
+
+fn validate_allowed_ips(ips: &[String]) -> Result<(), ValidationError> {
+    if let Err(invalid) = whitelist::validate_entries(ips) {
+        let mut error = ValidationError::new("allowed_ips");
+        error.message = Some(Cow::Owned(format!(
+            "allowed_ips contient une entrée invalide : {invalid} (IP ou CIDR attendu)"
+        )));
+        return Err(error);
+    }
+    Ok(())
+}
 
 const DEFAULT_LIMIT: i64 = 20;
 const MAX_LIMIT: i64 = 100;
@@ -88,8 +109,9 @@ pub async fn list_pending(
     }))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct UpdateRolesRequest {
+    #[validate(custom(function = "validate_role_names"))]
     pub roles: Vec<String>,
 }
 
@@ -99,13 +121,8 @@ pub async fn update_roles(
     Path(id): Path<String>,
     payload: Result<Json<UpdateRolesRequest>, JsonRejection>,
 ) -> Result<Json<MeResponse>, AppError> {
-    let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
-
-    if request.roles.iter().any(|role| role.trim().is_empty()) {
-        return Err(AppError::Validation(
-            "les rôles ne peuvent pas être vides".to_string(),
-        ));
-    }
+    let Json(request) = payload?;
+    validation::check(&request)?;
 
     for role in &request.roles {
         let exists = state.roles.exists(role).await.map_err(|e| {
@@ -142,10 +159,11 @@ pub async fn update_roles(
     load_profile(&state, user_id).await
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct UpdateWhitelistRequest {
     pub whitelist_only: bool,
     #[serde(default)]
+    #[validate(custom(function = "validate_allowed_ips"))]
     pub allowed_ips: Vec<String>,
 }
 
@@ -155,13 +173,9 @@ pub async fn update_whitelist(
     Path(id): Path<String>,
     payload: Result<Json<UpdateWhitelistRequest>, JsonRejection>,
 ) -> Result<Json<MeResponse>, AppError> {
-    let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
+    let Json(request) = payload?;
+    validation::check(&request)?;
 
-    if let Err(invalid) = whitelist::validate_entries(&request.allowed_ips) {
-        return Err(AppError::Validation(format!(
-            "allowed_ips contient une entrée invalide : {invalid:?} (IP ou CIDR attendu)"
-        )));
-    }
     if request.whitelist_only && request.allowed_ips.is_empty() {
         return Err(AppError::Validation(
             "whitelist_only sans allowed_ips verrouillerait le compte définitivement".to_string(),
@@ -192,7 +206,7 @@ pub async fn update_whitelist(
     load_profile(&state, user_id).await
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Validate)]
 pub struct UpdateStatusRequest {
     pub status: AccountStatus,
 }
@@ -203,7 +217,8 @@ pub async fn update_status(
     Path(id): Path<String>,
     payload: Result<Json<UpdateStatusRequest>, JsonRejection>,
 ) -> Result<Json<MeResponse>, AppError> {
-    let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
+    let Json(request) = payload?;
+    validation::check(&request)?;
 
     let user_id = parse_target_id(&id)?;
     let updated = state
@@ -242,7 +257,7 @@ pub async fn update_user(
     Path(id): Path<String>,
     payload: Result<Json<UpdateUserRequest>, JsonRejection>,
 ) -> Result<Json<MeResponse>, AppError> {
-    let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
+    let Json(request) = payload?;
     request
         .validate()
         .map_err(|_| AppError::Validation("nom ou email invalide".to_string()))?;
@@ -306,7 +321,7 @@ pub async fn delete_user(
 
 #[derive(Deserialize, Validate)]
 pub struct UpdatePasswordRequest {
-    #[validate(length(min = "PASSWORD_MIN_CHARS", message = "mot de passe trop court"))]
+    #[validate(custom(function = "crate::validation::validate_password_strength"))]
     pub password: String,
 }
 
@@ -316,10 +331,8 @@ pub async fn update_password(
     Path(id): Path<String>,
     payload: Result<Json<UpdatePasswordRequest>, JsonRejection>,
 ) -> Result<StatusCode, AppError> {
-    let Json(request) = payload.map_err(|e| AppError::Validation(e.body_text()))?;
-    request
-        .validate()
-        .map_err(|_| AppError::Validation("mot de passe trop court".to_string()))?;
+    let Json(request) = payload?;
+    validation::check(&request)?;
 
     let user_id = parse_target_id(&id)?;
     let hash = password::hash(&request.password).map_err(|_| AppError::Internal)?;

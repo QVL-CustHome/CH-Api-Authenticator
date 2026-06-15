@@ -4,6 +4,7 @@ use crate::handlers::login::client_ip_from_headers;
 use crate::repository::refresh_tokens::RotationOutcome;
 use crate::services::{secure_token, whitelist};
 use crate::state::AppState;
+use crate::validation;
 use axum::Json;
 use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
@@ -13,6 +14,7 @@ use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::time::Duration;
+use validator::Validate;
 
 #[derive(Serialize)]
 pub struct SessionBody {
@@ -103,9 +105,10 @@ pub async fn create_session_in_family(
     })
 }
 
-#[derive(Deserialize, Default)]
+#[derive(Deserialize, Default, Validate)]
 pub struct RefreshRequest {
     #[serde(default)]
+    #[validate(length(min = 1, message = "refresh token vide"))]
     pub refresh_token: Option<String>,
 }
 
@@ -119,6 +122,7 @@ pub async fn refresh(
 
         Err(_) => RefreshRequest::default(),
     };
+    validation::check(&body)?;
 
     let token = body
         .refresh_token
