@@ -30,6 +30,15 @@ pub async fn register(
 
     let Json(request) = payload?;
 
+    let registration_enabled = state
+        .settings_repo
+        .registration_enabled()
+        .await
+        .map_err(|_| AppError::Internal)?;
+    if !registration_enabled {
+        return Err(AppError::Forbidden("les inscriptions sont désactivées"));
+    }
+
     validation::check(&request)?;
     if request.name.trim().is_empty() {
         return Err(AppError::Validation("le nom est requis".to_string()));

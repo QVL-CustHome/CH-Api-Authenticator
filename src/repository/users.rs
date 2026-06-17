@@ -139,6 +139,15 @@ impl UserRepository {
         Ok(result.matched_count == 1)
     }
 
+    pub async fn count_created_since(
+        &self,
+        since: mongodb::bson::DateTime,
+    ) -> Result<u64, mongodb::error::Error> {
+        self.collection
+            .count_documents(doc! { "created_at": { "$gte": since } })
+            .await
+    }
+
     pub async fn update_password(
         &self,
         id: ObjectId,

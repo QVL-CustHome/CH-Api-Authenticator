@@ -19,6 +19,12 @@ pub fn router(state: AppState) -> Router {
         .route("/password", put(handlers::password::change))
 
         .route(
+            "/settings/registration",
+            get(handlers::settings::get_registration)
+                .put(handlers::settings::update_registration),
+        )
+
+        .route(
             "/me",
             get(handlers::me::get_me).put(handlers::me::update_me),
         )
@@ -37,6 +43,8 @@ pub fn router(state: AppState) -> Router {
             put(handlers::admin::update_password),
         )
         .route("/users/{id}/roles", put(handlers::admin::update_roles))
+
+        .route("/analytics/traffic", get(handlers::analytics::traffic))
         .route(
             "/users/{id}/whitelist",
             put(handlers::admin::update_whitelist),

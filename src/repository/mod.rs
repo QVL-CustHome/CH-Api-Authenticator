@@ -1,6 +1,8 @@
+pub mod login_events;
 pub mod refresh_tokens;
 pub mod reset_tokens;
 pub mod roles;
+pub mod settings;
 pub mod users;
 
 use mongodb::bson::doc;

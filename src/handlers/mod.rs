@@ -1,4 +1,5 @@
 pub mod admin;
+pub mod analytics;
 pub mod health;
 pub mod login;
 pub mod me;
@@ -7,4 +8,5 @@ pub mod ping;
 pub mod register;
 pub mod roles;
 pub mod session;
+pub mod settings;
 pub mod validate;

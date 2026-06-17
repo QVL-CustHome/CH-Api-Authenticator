@@ -1,3 +1,4 @@
+use crate::domain::role::Portal;
 use crate::domain::user::AccountStatus;
 use crate::error::AppError;
 use crate::handlers::session::{Session, create_session};
@@ -80,6 +81,18 @@ pub async fn login(
         }
         None
     };
+
+    if let Some(user_id) = user.id {
+        let portals: Vec<String> = user
+            .roles
+            .iter()
+            .filter(|role| Portal::ALL.iter().any(|p| p.role_name() == role.as_str()))
+            .cloned()
+            .collect();
+        if let Err(e) = state.login_events.record(user_id, &portals).await {
+            tracing::warn!(error = %e, "Enregistrement de l'événement de connexion en échec");
+        }
+    }
 
     create_session(&state, &user, token_ip).await
 }

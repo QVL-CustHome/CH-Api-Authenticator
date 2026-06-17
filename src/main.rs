@@ -46,6 +46,7 @@ async fn main() {
         state.users.ensure_indexes().await?;
         state.roles.ensure_indexes().await?;
         state.reset_tokens.ensure_indexes().await?;
+        state.login_events.ensure_indexes().await?;
         state.refresh_tokens.ensure_indexes().await
     };
     if let Err(e) = indexes.await {
