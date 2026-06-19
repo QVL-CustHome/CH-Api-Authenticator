@@ -1,16 +1,60 @@
-use crate::domain::user::User;
-use ch_auth_jwt::{Claims, JwtCodec, JwtError};
-use std::time::Duration;
+use crate::domain::user::{User, deserialize_roles};
+use jsonwebtoken::errors::Error as JwtError;
+use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use serde::{Deserialize, Serialize};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+pub use jsonwebtoken::errors::ErrorKind as JwtErrorKind;
+
+const JWT_ALGORITHM: Algorithm = Algorithm::HS256;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Claims {
+    pub sub: String,
+
+    #[serde(default, deserialize_with = "deserialize_roles")]
+    pub roles: Vec<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ip: Option<String>,
+
+    pub iat: u64,
+    pub exp: u64,
+}
+
+impl Claims {
+    pub fn new(
+        sub: impl Into<String>,
+        roles: Vec<String>,
+        ip: Option<String>,
+        iat: u64,
+        exp: u64,
+    ) -> Self {
+        Self {
+            sub: sub.into(),
+            roles,
+            ip,
+            iat,
+            exp,
+        }
+    }
+
+    pub fn has_role(&self, role: &str) -> bool {
+        self.roles.iter().any(|owned| owned == role)
+    }
+}
 
 pub struct JwtService {
-    codec: JwtCodec,
+    encoding: EncodingKey,
+    decoding: DecodingKey,
     ttl: Duration,
 }
 
 impl JwtService {
     pub fn new(secret: &str, ttl_minutes: u64) -> Self {
         Self {
-            codec: JwtCodec::from_secret(secret),
+            encoding: EncodingKey::from_secret(secret.as_bytes()),
+            decoding: DecodingKey::from_secret(secret.as_bytes()),
             ttl: Duration::from_secs(ttl_minutes * 60),
         }
     }
@@ -24,18 +68,31 @@ impl JwtService {
             .id
             .map(|id| id.to_hex())
             .expect("utilisateur persisté : id renseigné");
-        self.codec.issue(sub, user.roles.clone(), ip, self.ttl)
+        let now = unix_now();
+        let claims = Claims::new(sub, user.roles.clone(), ip, now, now + self.ttl.as_secs());
+        self.encode(&claims)
     }
 
     pub fn validate(&self, token: &str) -> Result<Claims, JwtError> {
-        self.codec.decode(token)
+        let validation = Validation::new(JWT_ALGORITHM);
+        Ok(jsonwebtoken::decode::<Claims>(token, &self.decoding, &validation)?.claims)
     }
+
+    fn encode(&self, claims: &Claims) -> Result<String, JwtError> {
+        jsonwebtoken::encode(&Header::new(JWT_ALGORITHM), claims, &self.encoding)
+    }
+}
+
+fn unix_now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("horloge systeme anterieure a 1970")
+        .as_secs()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ch_auth_jwt::{Algorithm, Claims, JwtErrorKind, unix_now};
     use jsonwebtoken::{EncodingKey, Header};
     use mongodb::bson::oid::ObjectId;
 

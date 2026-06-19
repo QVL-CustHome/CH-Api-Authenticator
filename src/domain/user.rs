@@ -1,6 +1,7 @@
 use mongodb::bson::DateTime;
 use mongodb::bson::oid::ObjectId;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
@@ -14,7 +15,7 @@ pub struct User {
 
     pub password_hash: String,
 
-    #[serde(default, deserialize_with = "ch_auth_jwt::deserialize_roles")]
+    #[serde(default, deserialize_with = "deserialize_roles")]
     pub roles: Vec<String>,
 
     #[serde(default)]
@@ -27,6 +28,31 @@ pub struct User {
     pub allowed_ips: Vec<String>,
     pub created_at: DateTime,
     pub updated_at: DateTime,
+}
+
+pub fn deserialize_roles<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum RolesFormat {
+        Flat(Vec<String>),
+        PerPortalMany(HashMap<String, Vec<String>>),
+        PerPortalOne(HashMap<String, String>),
+    }
+
+    let collected = match RolesFormat::deserialize(deserializer)? {
+        RolesFormat::Flat(roles) => roles,
+        RolesFormat::PerPortalMany(map) => map.into_values().flatten().collect(),
+        RolesFormat::PerPortalOne(map) => map.into_values().collect(),
+    };
+
+    let mut seen = HashSet::new();
+    Ok(collected
+        .into_iter()
+        .filter(|role| seen.insert(role.clone()))
+        .collect())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
