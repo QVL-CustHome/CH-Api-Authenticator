@@ -1,9 +1,9 @@
 use crate::error::AppError;
+use crate::services::jwt::Claims;
 use crate::state::AppState;
 use axum::extract::FromRequestParts;
 use axum::http::header;
 use axum::http::request::Parts;
-use ch_auth_jwt::{Claims, extract_token};
 
 pub struct AuthUser(pub Claims);
 
@@ -55,6 +55,30 @@ fn header_value(parts: &Parts, name: header::HeaderName) -> Option<String> {
         .get(name)
         .and_then(|value| value.to_str().ok())
         .map(str::to_string)
+}
+
+fn extract_token(
+    authorization_header: Option<&str>,
+    cookie_header: Option<&str>,
+    cookie_name: &str,
+) -> Option<String> {
+    if let Some(token) = authorization_header.and_then(token_from_bearer) {
+        return Some(token);
+    }
+    cookie_header.and_then(|cookies| token_from_cookie(cookies, cookie_name))
+}
+
+fn token_from_bearer(header_value: &str) -> Option<String> {
+    let token = header_value.strip_prefix("Bearer ")?.trim();
+    (!token.is_empty()).then(|| token.to_string())
+}
+
+fn token_from_cookie(cookie_header: &str, cookie_name: &str) -> Option<String> {
+    cookie_header.split(';').find_map(|pair| {
+        let (name, value) = pair.trim().split_once('=')?;
+        let value = value.trim();
+        (name == cookie_name && !value.is_empty()).then(|| value.to_string())
+    })
 }
 
 #[cfg(test)]
