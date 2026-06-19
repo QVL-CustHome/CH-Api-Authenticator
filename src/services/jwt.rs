@@ -1,33 +1,16 @@
 use crate::domain::user::User;
-use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Header, Validation};
-use serde::{Deserialize, Serialize};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Claims {
-
-    pub sub: String,
-
-    #[serde(default, deserialize_with = "crate::domain::user::deserialize_roles")]
-    pub roles: Vec<String>,
-
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ip: Option<String>,
-    pub iat: u64,
-    pub exp: u64,
-}
+use ch_auth_jwt::{Claims, JwtCodec, JwtError};
+use std::time::Duration;
 
 pub struct JwtService {
-    encoding: EncodingKey,
-    decoding: DecodingKey,
+    codec: JwtCodec,
     ttl: Duration,
 }
 
 impl JwtService {
     pub fn new(secret: &str, ttl_minutes: u64) -> Self {
         Self {
-            encoding: EncodingKey::from_secret(secret.as_bytes()),
-            decoding: DecodingKey::from_secret(secret.as_bytes()),
+            codec: JwtCodec::from_secret(secret),
             ttl: Duration::from_secs(ttl_minutes * 60),
         }
     }
@@ -36,42 +19,24 @@ impl JwtService {
         self.ttl.as_secs()
     }
 
-    pub fn issue(
-        &self,
-        user: &User,
-        ip: Option<String>,
-    ) -> Result<String, jsonwebtoken::errors::Error> {
-        let now = unix_now();
-        let claims = Claims {
-            sub: user
-                .id
-                .map(|id| id.to_hex())
-                .expect("utilisateur persisté : id renseigné"),
-            roles: user.roles.clone(),
-            ip,
-            iat: now,
-            exp: now + self.ttl.as_secs(),
-        };
-        jsonwebtoken::encode(&Header::new(Algorithm::HS256), &claims, &self.encoding)
+    pub fn issue(&self, user: &User, ip: Option<String>) -> Result<String, JwtError> {
+        let sub = user
+            .id
+            .map(|id| id.to_hex())
+            .expect("utilisateur persisté : id renseigné");
+        self.codec.issue(sub, user.roles.clone(), ip, self.ttl)
     }
 
-    #[allow(dead_code)]
-    pub fn validate(&self, token: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
-        let validation = Validation::new(Algorithm::HS256);
-        Ok(jsonwebtoken::decode::<Claims>(token, &self.decoding, &validation)?.claims)
+    pub fn validate(&self, token: &str) -> Result<Claims, JwtError> {
+        self.codec.decode(token)
     }
-}
-
-fn unix_now() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("horloge système antérieure à 1970")
-        .as_secs()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ch_auth_jwt::{Algorithm, Claims, JwtErrorKind, unix_now};
+    use jsonwebtoken::{EncodingKey, Header};
     use mongodb::bson::oid::ObjectId;
 
     const SECRET: &str = "un-secret-de-test-suffisamment-long!!!!!";
@@ -115,13 +80,7 @@ mod tests {
         let service = JwtService::new(SECRET, 15);
 
         let now = unix_now();
-        let claims = Claims {
-            sub: "x".to_string(),
-            roles: Vec::new(),
-            ip: None,
-            iat: now - 3600,
-            exp: now - 600,
-        };
+        let claims = Claims::new("x", Vec::new(), None, now - 3600, now - 600);
         let token = jsonwebtoken::encode(
             &Header::new(Algorithm::HS256),
             &claims,
@@ -130,10 +89,7 @@ mod tests {
         .unwrap();
 
         let err = service.validate(&token).unwrap_err();
-        assert_eq!(
-            err.kind(),
-            &jsonwebtoken::errors::ErrorKind::ExpiredSignature
-        );
+        assert_eq!(err.kind(), &JwtErrorKind::ExpiredSignature);
     }
 
     #[test]
@@ -143,10 +99,7 @@ mod tests {
 
         let token = autre.issue(&user_with_roles(), None).unwrap();
         let err = service.validate(&token).unwrap_err();
-        assert_eq!(
-            err.kind(),
-            &jsonwebtoken::errors::ErrorKind::InvalidSignature
-        );
+        assert_eq!(err.kind(), &JwtErrorKind::InvalidSignature);
     }
 
     #[test]

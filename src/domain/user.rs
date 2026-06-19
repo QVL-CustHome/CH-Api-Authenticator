@@ -1,7 +1,6 @@
 use mongodb::bson::DateTime;
 use mongodb::bson::oid::ObjectId;
-use serde::{Deserialize, Deserializer, Serialize};
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
@@ -15,7 +14,7 @@ pub struct User {
 
     pub password_hash: String,
 
-    #[serde(default, deserialize_with = "deserialize_roles")]
+    #[serde(default, deserialize_with = "ch_auth_jwt::deserialize_roles")]
     pub roles: Vec<String>,
 
     #[serde(default)]
@@ -30,30 +29,6 @@ pub struct User {
     pub updated_at: DateTime,
 }
 
-pub fn deserialize_roles<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum RolesFormat {
-        Flat(Vec<String>),
-        PerPortalMany(HashMap<String, Vec<String>>),
-        PerPortalOne(HashMap<String, String>),
-    }
-    let collected = match RolesFormat::deserialize(deserializer)? {
-        RolesFormat::Flat(roles) => roles,
-        RolesFormat::PerPortalMany(map) => map.into_values().flatten().collect(),
-        RolesFormat::PerPortalOne(map) => map.into_values().collect(),
-    };
-
-    let mut seen = std::collections::HashSet::new();
-    Ok(collected
-        .into_iter()
-        .filter(|role| seen.insert(role.clone()))
-        .collect())
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AccountStatus {
@@ -66,9 +41,8 @@ pub enum AccountStatus {
 }
 
 impl Default for AccountStatus {
-
     fn default() -> Self {
-        AccountStatus::Active
+        AccountStatus::PendingValidation
     }
 }
 
@@ -104,11 +78,23 @@ mod tests {
     }
 
     #[test]
-    fn nouveau_compte_actif_par_defaut() {
+    fn statut_par_defaut_non_permissif() {
+        assert_eq!(AccountStatus::default(), AccountStatus::PendingValidation);
+    }
 
+    #[test]
+    fn nouveau_compte_via_constructeur_actif() {
         let user = User::new("a@b.c", "hash".to_string(), Vec::new());
         assert_eq!(user.status, AccountStatus::Active);
-        assert_eq!(AccountStatus::default(), AccountStatus::Active);
         assert_eq!(user.name, "");
+    }
+
+    #[test]
+    fn user_deserialise_sans_statut_est_en_attente() {
+        let reference = User::new("x@y.z", "h".to_string(), Vec::new());
+        let mut document = mongodb::bson::to_document(&reference).unwrap();
+        document.remove("status");
+        let user: User = mongodb::bson::from_document(document).unwrap();
+        assert_eq!(user.status, AccountStatus::PendingValidation);
     }
 }

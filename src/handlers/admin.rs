@@ -56,31 +56,57 @@ pub struct UserListResponse {
     pub total: u64,
 }
 
-pub async fn list_users(
-    State(state): State<AppState>,
-    PortalAdmin(_admin): PortalAdmin,
-    Query(query): Query<ListQuery>,
-) -> Result<Json<UserListResponse>, AppError> {
-    let page = query.page.unwrap_or(1).max(1);
-    let limit = query.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
-    let skip = (page - 1) * limit as u64;
-    let status = query.status.as_deref().map(parse_status).transpose()?;
+struct Pagination {
+    page: u64,
+    limit: i64,
+    skip: u64,
+}
 
+fn paginate(page: Option<u64>, limit: Option<i64>) -> Pagination {
+    let page = page.unwrap_or(1).max(1);
+    let limit = limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
+    let skip = (page - 1) * limit as u64;
+    Pagination { page, limit, skip }
+}
+
+async fn paginated_users(
+    state: &AppState,
+    pagination: Pagination,
+    email: Option<&str>,
+    status: Option<AccountStatus>,
+    failure_context: &'static str,
+) -> Result<Json<UserListResponse>, AppError> {
     let (users, total) = state
         .users
-        .list(skip, limit, query.email.as_deref(), status)
+        .list(pagination.skip, pagination.limit, email, status)
         .await
         .map_err(|e| {
-            tracing::error!(error = %e, "Liste des utilisateurs en échec");
+            tracing::error!(error = %e, "{}", failure_context);
             AppError::Internal
         })?;
 
     Ok(Json(UserListResponse {
         users: users.into_iter().map(profile).collect(),
-        page,
-        limit,
+        page: pagination.page,
+        limit: pagination.limit,
         total,
     }))
+}
+
+pub async fn list_users(
+    State(state): State<AppState>,
+    PortalAdmin(_admin): PortalAdmin,
+    Query(query): Query<ListQuery>,
+) -> Result<Json<UserListResponse>, AppError> {
+    let status = query.status.as_deref().map(parse_status).transpose()?;
+    paginated_users(
+        &state,
+        paginate(query.page, query.limit),
+        query.email.as_deref(),
+        status,
+        "Liste des utilisateurs en échec",
+    )
+    .await
 }
 
 pub async fn list_pending(
@@ -88,25 +114,14 @@ pub async fn list_pending(
     PortalAdmin(_admin): PortalAdmin,
     Query(query): Query<ListQuery>,
 ) -> Result<Json<UserListResponse>, AppError> {
-    let page = query.page.unwrap_or(1).max(1);
-    let limit = query.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
-    let skip = (page - 1) * limit as u64;
-
-    let (users, total) = state
-        .users
-        .list(skip, limit, None, Some(AccountStatus::PendingValidation))
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Liste des comptes en attente en échec");
-            AppError::Internal
-        })?;
-
-    Ok(Json(UserListResponse {
-        users: users.into_iter().map(profile).collect(),
-        page,
-        limit,
-        total,
-    }))
+    paginated_users(
+        &state,
+        paginate(query.page, query.limit),
+        None,
+        Some(AccountStatus::PendingValidation),
+        "Liste des comptes en attente en échec",
+    )
+    .await
 }
 
 #[derive(Deserialize, Validate)]
