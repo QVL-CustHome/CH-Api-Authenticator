@@ -29,6 +29,7 @@ lettre = { version = "0.11", default-features = false, features = ["smtp-transpo
 # Hash des tokens de reset : seul le SHA-256 est stocké en base (US-17).
 sha2 = "0.10"
 hex = "0.4"
+subtle = "2"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
