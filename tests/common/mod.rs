@@ -91,6 +91,7 @@ pub fn state_with_mailer(
             },
             secrets: Secrets {
                 jwt_secret: JWT_SECRET.to_string(),
+                internal_api_secret: "un-secret-interne-de-test-suffisamment-long!".to_string(),
                 mongo_uri: "mongodb://localhost:27017/test".to_string(),
                 admin_email: None,
                 admin_password: None,

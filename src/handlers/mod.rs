@@ -1,6 +1,7 @@
 pub mod admin;
 pub mod analytics;
 pub mod health;
+pub mod internal;
 pub mod login;
 pub mod me;
 pub mod password;

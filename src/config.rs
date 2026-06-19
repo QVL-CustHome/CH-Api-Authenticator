@@ -3,6 +3,7 @@ use figment::providers::{Env, Format, Toml};
 use serde::Deserialize;
 
 pub const MIN_JWT_SECRET_BYTES: usize = 32;
+pub const MIN_INTERNAL_API_SECRET_BYTES: usize = 32;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -13,6 +14,10 @@ pub enum ConfigError {
     MissingSecret(&'static str),
     #[error("JWT_SECRET trop court : {0} octets (minimum {MIN_JWT_SECRET_BYTES})")]
     WeakJwtSecret(usize),
+    #[error(
+        "INTERNAL_API_SECRET trop court : {0} octets (minimum {MIN_INTERNAL_API_SECRET_BYTES})"
+    )]
+    WeakInternalApiSecret(usize),
     #[error("valeur invalide pour {0} : {1}")]
     InvalidValue(&'static str, String),
 }
@@ -121,6 +126,7 @@ pub enum EmailMode {
 #[derive(Clone)]
 pub struct Secrets {
     pub jwt_secret: String,
+    pub internal_api_secret: String,
     pub mongo_uri: String,
     pub admin_email: Option<String>,
     pub admin_password: Option<String>,
@@ -135,6 +141,7 @@ impl std::fmt::Debug for Secrets {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Secrets")
             .field("jwt_secret", &"***")
+            .field("internal_api_secret", &"***")
             .field("mongo_uri", &"***")
             .field("admin_email", &self.admin_email.as_deref().map(|_| "***"))
             .field(
@@ -177,6 +184,7 @@ pub fn load(path: &str) -> Result<Settings, ConfigError> {
 fn load_secrets() -> Result<Secrets, ConfigError> {
     Ok(Secrets {
         jwt_secret: require("JWT_SECRET")?,
+        internal_api_secret: require("INTERNAL_API_SECRET")?,
         mongo_uri: require("MONGO_URI")?,
         admin_email: optional("ADMIN_EMAIL"),
         admin_password: optional("ADMIN_PASSWORD"),
@@ -213,9 +221,13 @@ fn optional(name: &str) -> Option<String> {
 }
 
 fn validate_secrets(secrets: &Secrets) -> Result<(), ConfigError> {
-    let len = secrets.jwt_secret.len();
-    if len < MIN_JWT_SECRET_BYTES {
-        return Err(ConfigError::WeakJwtSecret(len));
+    let jwt_len = secrets.jwt_secret.len();
+    if jwt_len < MIN_JWT_SECRET_BYTES {
+        return Err(ConfigError::WeakJwtSecret(jwt_len));
+    }
+    let internal_len = secrets.internal_api_secret.len();
+    if internal_len < MIN_INTERNAL_API_SECRET_BYTES {
+        return Err(ConfigError::WeakInternalApiSecret(internal_len));
     }
     Ok(())
 }
@@ -235,6 +247,7 @@ mod tests {
     fn secrets(jwt_secret: &str) -> Secrets {
         Secrets {
             jwt_secret: jwt_secret.to_string(),
+            internal_api_secret: "un-secret-interne-suffisamment-long-aussi!".to_string(),
             mongo_uri: "mongodb://localhost:27017/test".to_string(),
             admin_email: None,
             admin_password: None,
