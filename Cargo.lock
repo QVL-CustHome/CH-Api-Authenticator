@@ -237,6 +237,7 @@ version = "0.1.0"
 dependencies = [
  "argon2",
  "axum",
+ "ch-auth-jwt",
  "dotenvy",
  "figment",
  "hex",
@@ -258,6 +259,14 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "validator",
+]
+
+[[package]]
+name = "ch-auth-jwt"
+version = "0.1.0"
+dependencies = [
+ "jsonwebtoken",
+ "serde",
 ]
 
 [[package]]

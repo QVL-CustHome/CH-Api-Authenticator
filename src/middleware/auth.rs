@@ -1,9 +1,9 @@
 use crate::error::AppError;
-use crate::services::jwt::Claims;
 use crate::state::AppState;
 use axum::extract::FromRequestParts;
 use axum::http::header;
 use axum::http::request::Parts;
+use ch_auth_jwt::{Claims, extract_token};
 
 pub struct AuthUser(pub Claims);
 
@@ -15,7 +15,10 @@ impl FromRequestParts<AppState> for AuthUser {
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
         let cookie_name = &state.settings.config.token.cookie_name;
-        let token = extract_token(parts, cookie_name).ok_or(AppError::InvalidToken)?;
+        let authorization = header_value(parts, header::AUTHORIZATION);
+        let cookie = header_value(parts, header::COOKIE);
+        let token = extract_token(authorization.as_deref(), cookie.as_deref(), cookie_name)
+            .ok_or(AppError::InvalidToken)?;
         let claims = state
             .jwt
             .validate(&token)
@@ -46,18 +49,12 @@ impl FromRequestParts<AppState> for PortalAdmin {
     }
 }
 
-fn extract_token(parts: &Parts, cookie_name: &str) -> Option<String> {
-    if let Some(value) = parts.headers.get(header::AUTHORIZATION) {
-        let token = value.to_str().ok()?.strip_prefix("Bearer ")?.trim();
-        return (!token.is_empty()).then(|| token.to_string());
-    }
-
-    let cookies = parts.headers.get(header::COOKIE)?.to_str().ok()?;
-    cookies.split(';').find_map(|pair| {
-        let (name, value) = pair.trim().split_once('=')?;
-        let value = value.trim();
-        (name == cookie_name && !value.is_empty()).then(|| value.to_string())
-    })
+fn header_value(parts: &Parts, name: header::HeaderName) -> Option<String> {
+    parts
+        .headers
+        .get(name)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string)
 }
 
 #[cfg(test)]
@@ -224,11 +221,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn header_malforme_401_sans_repli_cookie() {
+    async fn header_non_bearer_replie_sur_le_cookie() {
         let state = test_state();
-        let (token, _) = token_for(&state);
+        let (token, user_id) = token_for(&state);
 
-        let (status, _) = get_status(
+        let (status, body) = get_status(
             state,
             "/protege",
             &[
@@ -238,7 +235,8 @@ mod tests {
         )
         .await;
 
-        assert_eq!(status, StatusCode::UNAUTHORIZED);
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body, user_id);
     }
 
     #[tokio::test]
