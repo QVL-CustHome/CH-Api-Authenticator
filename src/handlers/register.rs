@@ -27,7 +27,6 @@ pub async fn register(
     State(state): State<AppState>,
     payload: Result<Json<RegisterRequest>, JsonRejection>,
 ) -> Result<impl IntoResponse, AppError> {
-
     let Json(request) = payload?;
 
     let registration_enabled = state
@@ -56,9 +55,9 @@ pub async fn register(
 
     match state.users.insert(&user).await {
         Ok(id) => Ok((StatusCode::CREATED, Json(json!({ "user_id": id.to_hex() })))),
-        Err(RepositoryError::DuplicateEmail) => Err(AppError::Conflict("email dÃ©jÃ  utilisÃ©")),
+        Err(RepositoryError::DuplicateEmail) => Err(AppError::Conflict("email déjà utilisé")),
         Err(RepositoryError::Database(e)) => {
-            tracing::error!(error = %e, "Insertion utilisateur en Ã©chec");
+            tracing::error!(error = %e, "Insertion utilisateur en échec");
             Err(AppError::Internal)
         }
     }
