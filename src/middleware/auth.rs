@@ -111,6 +111,7 @@ mod tests {
         AppState::new(
             Settings {
                 config: Config {
+                    environment: crate::config::Environment::Dev,
                     server: ServerConfig {
                         port: 0,
                         log_level: "INFO".to_string(),

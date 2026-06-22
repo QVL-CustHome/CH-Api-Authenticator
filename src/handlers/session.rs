@@ -78,18 +78,19 @@ pub async fn create_session_in_family(
         })?;
 
     let token_config = &state.settings.config.token;
+    let cookie_secure = state.settings.config.cookie_secure_effective();
     let cookies = [
         build_cookie(
             &token_config.cookie_name,
             &access_token,
             state.jwt.ttl_seconds(),
-            token_config.cookie_secure,
+            cookie_secure,
         ),
         build_cookie(
             &token_config.refresh_cookie_name,
             &refresh_token,
             refresh_ttl.as_secs(),
-            token_config.cookie_secure,
+            cookie_secure,
         ),
     ];
 
@@ -220,14 +221,10 @@ pub async fn logout(
     }
 
     let token_config = &state.settings.config.token;
+    let cookie_secure = state.settings.config.cookie_secure_effective();
     let expired = [
-        build_cookie(&token_config.cookie_name, "", 0, token_config.cookie_secure),
-        build_cookie(
-            &token_config.refresh_cookie_name,
-            "",
-            0,
-            token_config.cookie_secure,
-        ),
+        build_cookie(&token_config.cookie_name, "", 0, cookie_secure),
+        build_cookie(&token_config.refresh_cookie_name, "", 0, cookie_secure),
     ];
     (
         AppendHeaders([

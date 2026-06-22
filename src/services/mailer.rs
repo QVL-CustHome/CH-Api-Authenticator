@@ -109,6 +109,7 @@ mod tests {
     fn settings(mode: EmailMode, from: &str, smtp_host: Option<&str>) -> Settings {
         Settings {
             config: Config {
+                environment: crate::config::Environment::Dev,
                 server: ServerConfig {
                     port: 0,
                     log_level: "INFO".to_string(),
