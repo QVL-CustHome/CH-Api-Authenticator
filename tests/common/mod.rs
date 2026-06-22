@@ -4,8 +4,8 @@ use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
 use ch_api_authenticator::config::{
-    Config, EmailConfig, PasswordResetConfig, RegistrationConfig, Secrets, ServerConfig, Settings,
-    TokenConfig,
+    Config, EmailConfig, Environment, PasswordResetConfig, RegistrationConfig, Secrets,
+    ServerConfig, Settings, TokenConfig,
 };
 use ch_api_authenticator::domain::user::User;
 use ch_api_authenticator::routes::router;
@@ -72,6 +72,7 @@ pub fn state_with_mailer(
     AppState::new(
         Settings {
             config: Config {
+                environment: Environment::Dev,
                 server: ServerConfig {
                     port: 0,
                     log_level: "INFO".to_string(),

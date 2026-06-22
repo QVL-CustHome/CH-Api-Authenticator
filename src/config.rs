@@ -32,6 +32,8 @@ impl From<figment::Error> for ConfigError {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
+    #[serde(default)]
+    pub environment: Environment,
     pub server: ServerConfig,
     pub token: TokenConfig,
     #[serde(default)]
@@ -40,6 +42,23 @@ pub struct Config {
     pub email: EmailConfig,
     #[serde(default)]
     pub password_reset: PasswordResetConfig,
+}
+
+impl Config {
+    pub fn cookie_secure_effective(&self) -> bool {
+        match self.environment {
+            Environment::Prod => true,
+            Environment::Dev => self.token.cookie_secure,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Environment {
+    #[default]
+    Dev,
+    Prod,
 }
 
 #[derive(Debug, Clone, Deserialize)]
