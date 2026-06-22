@@ -41,7 +41,7 @@ impl AppState {
     pub fn new(settings: Settings, db: Database, mailer: Mailer) -> Self {
         let jwt = Arc::new(JwtService::new(
             &settings.secrets.jwt_secret,
-            settings.config.token.ttl_minutes,
+            &settings.config.token,
         ));
         let trusted_proxies = TrustedProxies::from_env();
         let rate_limiters = Arc::new(RateLimiters::from_config(&settings.rate_limit));

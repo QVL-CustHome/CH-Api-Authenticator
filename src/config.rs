@@ -110,6 +110,20 @@ pub struct TokenConfig {
 
     #[serde(default = "default_refresh_cookie_name")]
     pub refresh_cookie_name: String,
+
+    #[serde(default = "default_jwt_issuer")]
+    pub issuer: String,
+
+    #[serde(default = "default_audience_drive")]
+    pub audience_drive: String,
+}
+
+fn default_jwt_issuer() -> String {
+    "ch-api-authenticator".to_string()
+}
+
+fn default_audience_drive() -> String {
+    "ch-api-drive".to_string()
 }
 
 fn default_refresh_ttl_days() -> u64 {
@@ -191,10 +205,18 @@ pub fn load(path: &str) -> Result<Settings, ConfigError> {
         .merge(Env::prefixed("CH__").split("__"))
         .extract()?;
 
-    if let Some(port_str) = optional("PORT") {
-        if let Ok(port) = port_str.parse::<u16>() {
-            config.server.port = port;
-        }
+    if let Some(port_str) = optional("PORT")
+        && let Ok(port) = port_str.parse::<u16>()
+    {
+        config.server.port = port;
+    }
+
+    if let Some(issuer) = optional("JWT_ISSUER") {
+        config.token.issuer = issuer;
+    }
+
+    if let Some(audience_drive) = optional("JWT_AUDIENCE_DRIVE") {
+        config.token.audience_drive = audience_drive;
     }
 
     let secrets = load_secrets()?;
