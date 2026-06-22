@@ -1,18 +1,18 @@
 use crate::domain::user::User;
 use crate::error::AppError;
-use crate::handlers::login::client_ip_from_headers;
 use crate::repository::refresh_tokens::RotationOutcome;
 use crate::services::{secure_token, whitelist};
 use crate::state::AppState;
 use crate::validation;
 use axum::Json;
-use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
+use axum::extract::{ConnectInfo, State};
 use axum::http::{HeaderMap, header};
 use axum::response::{AppendHeaders, IntoResponse};
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::net::SocketAddr;
 use std::time::Duration;
 use validator::Validate;
 
@@ -114,9 +114,16 @@ pub struct RefreshRequest {
 
 pub async fn refresh(
     State(state): State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     payload: Result<Json<RefreshRequest>, JsonRejection>,
 ) -> Result<impl IntoResponse, AppError> {
+    let client_ip = state.trusted_proxies.resolve(peer, &headers);
+    state
+        .rate_limiters
+        .refresh
+        .enforce(client_ip.to_string())?;
+
     let body = match payload {
         Ok(Json(request)) => request,
 
@@ -176,9 +183,6 @@ pub async fn refresh(
     };
 
     let token_ip = if user.whitelist_only {
-        let Some(client_ip) = client_ip_from_headers(&headers) else {
-            return Err(AppError::InvalidToken);
-        };
         if !whitelist::ip_allowed(client_ip, &user.allowed_ips) {
             return Err(AppError::InvalidToken);
         }

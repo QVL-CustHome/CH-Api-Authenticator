@@ -30,6 +30,10 @@ pub struct User {
     pub updated_at: DateTime,
 }
 
+pub fn normalize_email(raw: &str) -> String {
+    raw.trim().to_lowercase()
+}
+
 pub fn deserialize_roles<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
 where
     D: Deserializer<'de>,
@@ -78,7 +82,7 @@ impl User {
         Self {
             id: None,
             name: String::new(),
-            email: email.trim().to_lowercase(),
+            email: normalize_email(email),
             password_hash,
             roles,
             status: AccountStatus::Active,

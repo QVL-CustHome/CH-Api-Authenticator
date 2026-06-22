@@ -138,6 +138,20 @@ mod tests {
                 smtp_user: None,
                 smtp_password: None,
             },
+            rate_limit: crate::services::rate_limit::RateLimitConfig {
+                login: crate::services::rate_limit::RateLimitRule {
+                    max: 5,
+                    window: std::time::Duration::from_secs(300),
+                },
+                forgot: crate::services::rate_limit::RateLimitRule {
+                    max: 3,
+                    window: std::time::Duration::from_secs(900),
+                },
+                refresh: crate::services::rate_limit::RateLimitRule {
+                    max: 30,
+                    window: std::time::Duration::from_secs(60),
+                },
+            },
         }
     }
 

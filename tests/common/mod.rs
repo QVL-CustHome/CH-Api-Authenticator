@@ -100,6 +100,20 @@ pub fn state_with_mailer(
                 smtp_user: None,
                 smtp_password: None,
             },
+            rate_limit: ch_api_authenticator::services::rate_limit::RateLimitConfig {
+                login: ch_api_authenticator::services::rate_limit::RateLimitRule {
+                    max: 5,
+                    window: std::time::Duration::from_secs(300),
+                },
+                forgot: ch_api_authenticator::services::rate_limit::RateLimitRule {
+                    max: 3,
+                    window: std::time::Duration::from_secs(900),
+                },
+                refresh: ch_api_authenticator::services::rate_limit::RateLimitRule {
+                    max: 30,
+                    window: std::time::Duration::from_secs(60),
+                },
+            },
         },
         db.clone(),
         mailer,
