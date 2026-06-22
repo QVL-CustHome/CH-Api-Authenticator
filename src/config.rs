@@ -1,6 +1,8 @@
+use crate::services::rate_limit::{RateLimitConfig, RateLimitRule};
 use figment::Figment;
 use figment::providers::{Env, Format, Toml};
 use serde::Deserialize;
+use std::time::Duration;
 
 pub const MIN_JWT_SECRET_BYTES: usize = 32;
 pub const MIN_INTERNAL_API_SECRET_BYTES: usize = 32;
@@ -161,6 +163,7 @@ impl std::fmt::Debug for Secrets {
 pub struct Settings {
     pub config: Config,
     pub secrets: Secrets,
+    pub rate_limit: RateLimitConfig,
 }
 
 pub fn load(path: &str) -> Result<Settings, ConfigError> {
@@ -178,7 +181,52 @@ pub fn load(path: &str) -> Result<Settings, ConfigError> {
     let secrets = load_secrets()?;
     validate_secrets(&secrets)?;
     validate_email(&config.email, &secrets)?;
-    Ok(Settings { config, secrets })
+    let rate_limit = load_rate_limit()?;
+    Ok(Settings {
+        config,
+        secrets,
+        rate_limit,
+    })
+}
+
+fn load_rate_limit() -> Result<RateLimitConfig, ConfigError> {
+    Ok(RateLimitConfig {
+        login: RateLimitRule {
+            max: rate_limit_max("AUTH_RATE_LIMIT_LOGIN_MAX", 5)?,
+            window: rate_limit_window("AUTH_RATE_LIMIT_LOGIN_WINDOW_SECS", 300)?,
+        },
+        forgot: RateLimitRule {
+            max: rate_limit_max("AUTH_RATE_LIMIT_FORGOT_MAX", 3)?,
+            window: rate_limit_window("AUTH_RATE_LIMIT_FORGOT_WINDOW_SECS", 900)?,
+        },
+        refresh: RateLimitRule {
+            max: rate_limit_max("AUTH_RATE_LIMIT_REFRESH_MAX", 30)?,
+            window: rate_limit_window("AUTH_RATE_LIMIT_REFRESH_WINDOW_SECS", 60)?,
+        },
+    })
+}
+
+fn rate_limit_max(name: &'static str, default: u32) -> Result<u32, ConfigError> {
+    match optional(name) {
+        None => Ok(default),
+        Some(raw) => raw
+            .parse::<u32>()
+            .ok()
+            .filter(|max| *max > 0)
+            .ok_or_else(|| ConfigError::InvalidValue(name, raw)),
+    }
+}
+
+fn rate_limit_window(name: &'static str, default_secs: u64) -> Result<Duration, ConfigError> {
+    match optional(name) {
+        None => Ok(Duration::from_secs(default_secs)),
+        Some(raw) => raw
+            .parse::<u64>()
+            .ok()
+            .filter(|secs| *secs > 0)
+            .map(Duration::from_secs)
+            .ok_or_else(|| ConfigError::InvalidValue(name, raw)),
+    }
 }
 
 fn load_secrets() -> Result<Secrets, ConfigError> {

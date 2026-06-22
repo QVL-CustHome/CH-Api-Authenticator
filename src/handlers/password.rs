@@ -1,16 +1,18 @@
+use crate::domain::user::normalize_email;
 use crate::error::AppError;
 use crate::middleware::auth::AuthUser;
 use crate::services::{password, secure_token};
 use crate::state::AppState;
 use crate::validation;
 use axum::Json;
-use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
-use axum::http::StatusCode;
+use axum::extract::{ConnectInfo, State};
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use mongodb::bson::oid::ObjectId;
 use serde::Deserialize;
 use serde_json::json;
+use std::net::SocketAddr;
 use std::time::Duration;
 use validator::Validate;
 
@@ -85,10 +87,18 @@ pub async fn change(
 
 pub async fn forgot(
     State(state): State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     payload: Result<Json<ForgotRequest>, JsonRejection>,
 ) -> Result<impl IntoResponse, AppError> {
     let Json(request) = payload?;
     validation::check(&request)?;
+
+    let client_ip = state.trusted_proxies.resolve(peer, &headers);
+    state
+        .rate_limiters
+        .forgot
+        .enforce(format!("{client_ip}|{}", normalize_email(&request.email)))?;
 
     if let Some(user) = state
         .users

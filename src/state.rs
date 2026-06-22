@@ -5,8 +5,10 @@ use crate::repository::reset_tokens::ResetTokenRepository;
 use crate::repository::roles::RoleRepository;
 use crate::repository::settings::SettingsRepository;
 use crate::repository::users::UserRepository;
+use crate::services::client_ip::TrustedProxies;
 use crate::services::jwt::JwtService;
 use crate::services::mailer::Mailer;
+use crate::services::rate_limit::RateLimiters;
 use mongodb::Database;
 use std::sync::Arc;
 
@@ -29,6 +31,10 @@ pub struct AppState {
     pub jwt: Arc<JwtService>,
 
     pub mailer: Arc<Mailer>,
+
+    pub trusted_proxies: TrustedProxies,
+
+    pub rate_limiters: Arc<RateLimiters>,
 }
 
 impl AppState {
@@ -37,6 +43,8 @@ impl AppState {
             &settings.secrets.jwt_secret,
             settings.config.token.ttl_minutes,
         ));
+        let trusted_proxies = TrustedProxies::from_env();
+        let rate_limiters = Arc::new(RateLimiters::from_config(&settings.rate_limit));
         Self {
             settings: Arc::new(settings),
             users: UserRepository::new(&db),
@@ -48,6 +56,8 @@ impl AppState {
             db,
             jwt,
             mailer: Arc::new(mailer),
+            trusted_proxies,
+            rate_limiters,
         }
     }
 }

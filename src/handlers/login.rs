@@ -1,20 +1,18 @@
 use crate::domain::role::Portal;
-use crate::domain::user::AccountStatus;
+use crate::domain::user::{AccountStatus, normalize_email};
 use crate::error::AppError;
 use crate::handlers::session::{Session, create_session};
 use crate::services::{password, whitelist};
 use crate::state::AppState;
 use crate::validation;
 use axum::Json;
-use axum::extract::State;
 use axum::extract::rejection::JsonRejection;
+use axum::extract::{ConnectInfo, State};
 use axum::http::HeaderMap;
 use serde::Deserialize;
-use std::net::IpAddr;
+use std::net::SocketAddr;
 use std::sync::LazyLock;
 use validator::Validate;
-
-pub const CLIENT_IP_HEADER: &str = "x-client-ip";
 
 #[derive(Deserialize, Validate)]
 pub struct LoginRequest {
@@ -29,11 +27,18 @@ static DUMMY_HASH: LazyLock<String> =
 
 pub async fn login(
     State(state): State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
     payload: Result<Json<LoginRequest>, JsonRejection>,
 ) -> Result<Session, AppError> {
     let Json(request) = payload?;
     validation::check(&request)?;
+
+    let client_ip = state.trusted_proxies.resolve(peer, &headers);
+    state
+        .rate_limiters
+        .login
+        .enforce(format!("{client_ip}|{}", normalize_email(&request.email)))?;
 
     let user = state
         .users
@@ -60,24 +65,17 @@ pub async fn login(
         AccountStatus::Disabled => return Err(AppError::AccountDisabled),
     }
 
-    let client_ip = client_ip_from_headers(&headers);
     let token_ip = if user.whitelist_only {
-
-        let Some(client_ip) = client_ip else {
-            return Err(AppError::DeviceNotAllowed);
-        };
         if !whitelist::ip_allowed(client_ip, &user.allowed_ips) {
             return Err(AppError::DeviceNotAllowed);
         }
         Some(client_ip.to_string())
     } else {
-
-        if let (Some(client_ip), Some(id)) = (client_ip, user.id) {
-            if !whitelist::ip_allowed(client_ip, &user.allowed_ips) {
-                if let Err(e) = state.users.add_allowed_ip(id, &client_ip.to_string()).await {
-                    tracing::warn!(error = %e, "Auto-ajout de l'IP à la whitelist en échec");
-                }
-            }
+        if let Some(id) = user.id
+            && !whitelist::ip_allowed(client_ip, &user.allowed_ips)
+            && let Err(e) = state.users.add_allowed_ip(id, &client_ip.to_string()).await
+        {
+            tracing::warn!(error = %e, "Auto-ajout de l'IP à la whitelist en échec");
         }
         None
     };
@@ -95,14 +93,4 @@ pub async fn login(
     }
 
     create_session(&state, &user, token_ip).await
-}
-
-pub fn client_ip_from_headers(headers: &HeaderMap) -> Option<IpAddr> {
-    headers
-        .get(CLIENT_IP_HEADER)?
-        .to_str()
-        .ok()?
-        .trim()
-        .parse()
-        .ok()
 }

@@ -67,6 +67,8 @@ async fn main() {
         std::process::exit(1);
     }
 
+    spawn_rate_limit_cleanup(state.rate_limiters.clone());
+
     let port = state.settings.config.server.port;
     let app = routes::router(state);
 
@@ -80,10 +82,24 @@ async fn main() {
     };
 
     tracing::info!(%addr, version = env!("CARGO_PKG_VERSION"), "CH-Api-Authenticator démarré");
-    if let Err(e) = axum::serve(listener, app).await {
+    let service = app.into_make_service_with_connect_info::<std::net::SocketAddr>();
+    if let Err(e) = axum::serve(listener, service).await {
         eprintln!("Erreur serveur : {e}");
         std::process::exit(1);
     }
+}
+
+fn spawn_rate_limit_cleanup(
+    rate_limiters: std::sync::Arc<ch_api_authenticator::services::rate_limit::RateLimiters>,
+) {
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(std::time::Duration::from_secs(60));
+        ticker.tick().await;
+        loop {
+            ticker.tick().await;
+            rate_limiters.cleanup();
+        }
+    });
 }
 
 async fn seed_admin(state: &AppState) -> Result<(), String> {

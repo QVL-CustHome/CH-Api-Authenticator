@@ -1,4 +1,4 @@
-use crate::domain::user::{AccountStatus, User};
+use crate::domain::user::{AccountStatus, User, normalize_email};
 use mongodb::bson::doc;
 use mongodb::bson::oid::ObjectId;
 use mongodb::options::IndexOptions;
@@ -48,7 +48,7 @@ impl UserRepository {
 
     pub async fn find_by_email(&self, email: &str) -> Result<Option<User>, mongodb::error::Error> {
         self.collection
-            .find_one(doc! { "email": email.trim().to_lowercase() })
+            .find_one(doc! { "email": normalize_email(email) })
             .await
     }
 
@@ -65,7 +65,7 @@ impl UserRepository {
     ) -> Result<(Vec<User>, u64), mongodb::error::Error> {
         let mut filter = mongodb::bson::Document::new();
         if let Some(email) = email {
-            filter.insert("email", email.trim().to_lowercase());
+            filter.insert("email", normalize_email(email));
         }
         if let Some(status) = status {
             filter.insert(

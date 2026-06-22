@@ -1,6 +1,6 @@
 use axum::Json;
 use axum::extract::rejection::JsonRejection;
-use axum::http::StatusCode;
+use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use serde_json::json;
 
@@ -31,6 +31,9 @@ pub enum AppError {
 
     #[error("vous n'êtes pas autorisé à vous connecter avec cet appareil")]
     DeviceNotAllowed,
+
+    #[error("trop de requêtes, réessayez plus tard")]
+    TooManyRequests { retry_after_secs: u64 },
     #[error("erreur interne")]
     Internal,
 }
@@ -63,9 +66,18 @@ impl IntoResponse for AppError {
             AppError::AccountPending => (StatusCode::FORBIDDEN, "account_pending"),
             AppError::AccountDisabled => (StatusCode::FORBIDDEN, "account_disabled"),
             AppError::DeviceNotAllowed => (StatusCode::FORBIDDEN, "device_not_allowed"),
+            AppError::TooManyRequests { .. } => (StatusCode::TOO_MANY_REQUESTS, "too_many_requests"),
             AppError::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
         };
         let body = json!({ "error": error, "message": self.to_string() });
+        if let AppError::TooManyRequests { retry_after_secs } = self {
+            return (
+                status,
+                [(header::RETRY_AFTER, retry_after_secs.to_string())],
+                Json(body),
+            )
+                .into_response();
+        }
         (status, Json(body)).into_response()
     }
 }

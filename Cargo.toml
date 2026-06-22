@@ -19,6 +19,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 figment = { version = "0.10", features = ["toml", "env"] }
 ipnet = "2"
+governor = "0.6"
 tower-http = { version = "0.6", features = ["trace"] }
 dotenvy = "0.15"
 thiserror = "2"
