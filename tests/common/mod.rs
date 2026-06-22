@@ -83,6 +83,8 @@ pub fn state_with_mailer(
                     cookie_secure,
                     refresh_ttl_days: 7,
                     refresh_cookie_name: "ch_refresh".to_string(),
+                    issuer: "ch-api-authenticator".to_string(),
+                    audience_drive: "ch-api-drive".to_string(),
                 },
                 registration: RegistrationConfig {
                     default_roles: default_roles.into_values().flatten().collect(),

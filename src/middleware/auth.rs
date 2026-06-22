@@ -122,6 +122,8 @@ mod tests {
                         cookie_secure: false,
                         refresh_ttl_days: 7,
                         refresh_cookie_name: "ch_refresh".to_string(),
+                        issuer: "ch-api-authenticator".to_string(),
+                        audience_drive: "ch-api-drive".to_string(),
                     },
                     registration: RegistrationConfig::default(),
                     email: EmailConfig::default(),
