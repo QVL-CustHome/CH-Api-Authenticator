@@ -8,16 +8,18 @@ pub enum Portal {
     Admin,
     Drive,
     Home,
+    Budgy,
 }
 
 impl Portal {
-    pub const ALL: [Portal; 3] = [Portal::Admin, Portal::Drive, Portal::Home];
+    pub const ALL: [Portal; 4] = [Portal::Admin, Portal::Drive, Portal::Home, Portal::Budgy];
 
     pub fn role_name(self) -> &'static str {
         match self {
             Portal::Admin => "admin",
             Portal::Drive => "drive",
             Portal::Home => "home",
+            Portal::Budgy => "budgy",
         }
     }
 
@@ -26,6 +28,7 @@ impl Portal {
             "portail_admin" => Some(Portal::Admin),
             "portail_drive" => Some(Portal::Drive),
             "portail_home" => Some(Portal::Home),
+            "portail_budgy" => Some(Portal::Budgy),
             _ => None,
         }
     }

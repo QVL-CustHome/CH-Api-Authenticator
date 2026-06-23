@@ -36,8 +36,12 @@ impl RoleRepository {
     }
 
     pub async fn ensure_portal_roles(&self) -> Result<(), mongodb::error::Error> {
+        let known_portals: Vec<String> = Portal::ALL
+            .iter()
+            .map(|portal| portal.role_name().to_string())
+            .collect();
         self.collection
-            .delete_many(doc! { "portal": { "$nin": ["admin", "drive", "home"] } })
+            .delete_many(doc! { "portal": { "$nin": known_portals } })
             .await?;
         for portal in Portal::ALL {
             let role = Role::portal_role(portal);
