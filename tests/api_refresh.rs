@@ -14,7 +14,7 @@ async fn login_session(
     assert_eq!(response.status, StatusCode::OK);
     (
         response.body["access_token"].as_str().unwrap().to_string(),
-        response.body["refresh_token"].as_str().unwrap().to_string(),
+        refresh_token_from_cookies(&response.set_cookies),
         response.set_cookies.clone(),
     )
 }
@@ -53,6 +53,59 @@ async fn login_emet_un_refresh_token_et_son_cookie() {
 }
 
 #[tokio::test]
+async fn login_n_expose_pas_le_refresh_dans_le_body() {
+    let db = test_db().await;
+    let state = test_state(&db).await;
+    seed_user(&state, "martin@test.fr", HashMap::new()).await;
+
+    let response = post_json(router(state.clone()), "/login", LOGIN_BODY, &[]).await;
+    assert_eq!(response.status, StatusCode::OK);
+
+    assert!(response.body["access_token"].is_string());
+    assert_eq!(response.body["token_type"], "Bearer");
+    assert!(response.body["expires_in"].is_u64());
+    assert!(response.body["refresh_token"].is_null());
+    assert!(response.body["refresh_expires_in"].is_null());
+
+    let refresh_cookie = response
+        .set_cookies
+        .iter()
+        .find(|c| c.starts_with("ch_refresh="))
+        .expect("cookie ch_refresh posé");
+    assert!(refresh_cookie.contains("HttpOnly"));
+    assert!(refresh_cookie.contains("SameSite=Lax"));
+
+    db.drop().await.unwrap();
+}
+
+#[tokio::test]
+async fn refresh_n_expose_pas_le_refresh_dans_le_body() {
+    let db = test_db().await;
+    let state = test_state(&db).await;
+    seed_user(&state, "martin@test.fr", HashMap::new()).await;
+    let (_, refresh1, _) = login_session(&state).await;
+
+    let response = refresh_with(&state, &refresh1).await;
+    assert_eq!(response.status, StatusCode::OK);
+
+    assert!(response.body["access_token"].is_string());
+    assert_eq!(response.body["token_type"], "Bearer");
+    assert!(response.body["expires_in"].is_u64());
+    assert!(response.body["refresh_token"].is_null());
+    assert!(response.body["refresh_expires_in"].is_null());
+
+    let refresh_cookie = response
+        .set_cookies
+        .iter()
+        .find(|c| c.starts_with("ch_refresh="))
+        .expect("cookie ch_refresh posé à la rotation");
+    assert!(refresh_cookie.contains("HttpOnly"));
+    assert!(refresh_cookie.contains("SameSite=Lax"));
+
+    db.drop().await.unwrap();
+}
+
+#[tokio::test]
 async fn rotation_nominale() {
     let db = test_db().await;
     let state = test_state(&db).await;
@@ -65,7 +118,7 @@ async fn rotation_nominale() {
     let access = response.body["access_token"].as_str().unwrap();
     let claims = state.jwt.validate(access).unwrap();
     assert_eq!(claims.roles, vec!["user".to_string()]);
-    let refresh2 = response.body["refresh_token"].as_str().unwrap().to_string();
+    let refresh2 = refresh_token_from_cookies(&response.set_cookies);
     assert_ne!(refresh1, refresh2, "le refresh token tourne à chaque usage");
 
     assert_eq!(refresh_with(&state, &refresh2).await.status, StatusCode::OK);
@@ -85,10 +138,7 @@ async fn reutilisation_revoque_toute_la_famille() {
     seed_user(&state, "martin@test.fr", HashMap::new()).await;
     let (_, refresh1, _) = login_session(&state).await;
 
-    let refresh2 = refresh_with(&state, &refresh1).await.body["refresh_token"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    let refresh2 = refresh_token_from_cookies(&refresh_with(&state, &refresh1).await.set_cookies);
 
     assert_eq!(
         refresh_with(&state, &refresh1).await.status,
@@ -213,7 +263,7 @@ async fn changement_et_reset_de_mot_de_passe_revoquent_les_refresh() {
     use axum::http::{Request, header};
     use tower::ServiceExt;
     let change = router(state.clone())
-        .oneshot(
+        .oneshot(with_connect_info(
             Request::put("/password")
                 .header(header::CONTENT_TYPE, "application/json")
                 .header(header::AUTHORIZATION, format!("Bearer {access}"))
@@ -221,7 +271,7 @@ async fn changement_et_reset_de_mot_de_passe_revoquent_les_refresh() {
                     r#"{{"current_password": "{PASSWORD}", "new_password": "Nouveau-Mdp-Solide1"}}"#
                 )))
                 .unwrap(),
-        )
+        ))
         .await
         .unwrap();
     assert_eq!(change.status(), StatusCode::OK);
@@ -238,7 +288,7 @@ async fn changement_et_reset_de_mot_de_passe_revoquent_les_refresh() {
         &[],
     )
     .await;
-    let refresh2 = login2.body["refresh_token"].as_str().unwrap().to_string();
+    let refresh2 = refresh_token_from_cookies(&login2.set_cookies);
 
     post_json(
         router(state.clone()),

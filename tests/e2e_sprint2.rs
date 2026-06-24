@@ -19,13 +19,13 @@ async fn put_json_auth(
     use http_body_util::BodyExt;
     use tower::ServiceExt;
     let response = router(state.clone())
-        .oneshot(
+        .oneshot(with_connect_info(
             Request::put(path)
                 .header(header::CONTENT_TYPE, "application/json")
                 .header(header::AUTHORIZATION, format!("Bearer {token}"))
                 .body(Body::from(body.to_string()))
                 .unwrap(),
-        )
+        ))
         .await
         .unwrap();
     let status = response.status();
@@ -88,7 +88,7 @@ async fn cycle_de_vie_complet_d_un_compte() {
     .await;
     assert_eq!(login.status, StatusCode::OK);
     let access = login.body["access_token"].as_str().unwrap().to_string();
-    let refresh = login.body["refresh_token"].as_str().unwrap().to_string();
+    let refresh = refresh_token_from_cookies(&login.set_cookies);
     assert_eq!(
         validate_status(&state, &access, "portail_a").await,
         StatusCode::OK
@@ -111,7 +111,7 @@ async fn cycle_de_vie_complet_d_un_compte() {
     .await;
     assert_eq!(rotated.status, StatusCode::OK);
     let access2 = rotated.body["access_token"].as_str().unwrap().to_string();
-    let refresh2 = rotated.body["refresh_token"].as_str().unwrap().to_string();
+    let refresh2 = refresh_token_from_cookies(&rotated.set_cookies);
     assert_eq!(
         validate_status(&state, &access2, "portail_a").await,
         StatusCode::OK
@@ -142,7 +142,7 @@ async fn cycle_de_vie_complet_d_un_compte() {
     )
     .await;
     assert_eq!(relogin.status, StatusCode::OK);
-    let refresh3 = relogin.body["refresh_token"].as_str().unwrap().to_string();
+    let refresh3 = refresh_token_from_cookies(&relogin.set_cookies);
 
     let logout = post_json(
         router(state.clone()),
@@ -185,7 +185,7 @@ async fn parcours_reset_integral() {
         &[],
     )
     .await;
-    let old_refresh = login.body["refresh_token"].as_str().unwrap().to_string();
+    let old_refresh = refresh_token_from_cookies(&login.set_cookies);
 
     let forgot = post_json(
         router(state.clone()),
@@ -298,7 +298,7 @@ async fn whitelist_administree_de_bout_en_bout() {
     .await;
     assert_eq!(login.status, StatusCode::OK);
     let access = login.body["access_token"].as_str().unwrap().to_string();
-    let refresh = login.body["refresh_token"].as_str().unwrap().to_string();
+    let refresh = refresh_token_from_cookies(&login.set_cookies);
 
     let ok = get(
         router(state.clone()),

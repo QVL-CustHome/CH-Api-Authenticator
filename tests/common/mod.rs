@@ -219,8 +219,17 @@ pub async fn get(app: Router, path: &str, headers: &[(&str, &str)]) -> TestRespo
     send(app, request.body(Body::empty()).unwrap()).await
 }
 
+pub fn with_connect_info(mut request: Request<Body>) -> Request<Body> {
+    use axum::extract::ConnectInfo;
+    use std::net::SocketAddr;
+    request
+        .extensions_mut()
+        .insert(ConnectInfo(SocketAddr::from(([127, 0, 0, 1], 54321))));
+    request
+}
+
 async fn send(app: Router, request: Request<Body>) -> TestResponse {
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.oneshot(with_connect_info(request)).await.unwrap();
     let status = response.status();
     let set_cookies: Vec<String> = response
         .headers()
@@ -242,6 +251,15 @@ async fn send(app: Router, request: Request<Body>) -> TestResponse {
         correlation_id,
         body,
     }
+}
+
+pub fn refresh_token_from_cookies(cookies: &[String]) -> String {
+    cookies
+        .iter()
+        .find_map(|cookie| cookie.strip_prefix("ch_refresh="))
+        .and_then(|rest| rest.split(';').next())
+        .map(|value| value.to_string())
+        .expect("cookie ch_refresh présent dans Set-Cookie")
 }
 
 pub async fn login_token(state: &AppState, email: &str) -> String {
