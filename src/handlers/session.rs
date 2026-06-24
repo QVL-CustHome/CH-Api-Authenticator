@@ -21,9 +21,6 @@ pub struct SessionBody {
     pub access_token: String,
     pub token_type: &'static str,
     pub expires_in: u64,
-
-    pub refresh_token: String,
-    pub refresh_expires_in: u64,
 }
 
 pub struct Session {
@@ -99,8 +96,6 @@ pub async fn create_session_in_family(
             access_token,
             token_type: "Bearer",
             expires_in: state.jwt.ttl_seconds(),
-            refresh_token,
-            refresh_expires_in: refresh_ttl.as_secs(),
         },
         cookies,
     })
