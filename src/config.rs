@@ -116,6 +116,9 @@ pub struct TokenConfig {
 
     #[serde(default = "default_audience_drive")]
     pub audience_drive: String,
+
+    #[serde(default = "default_audience_budgy")]
+    pub audience_budgy: String,
 }
 
 fn default_jwt_issuer() -> String {
@@ -124,6 +127,10 @@ fn default_jwt_issuer() -> String {
 
 fn default_audience_drive() -> String {
     "ch-api-drive".to_string()
+}
+
+fn default_audience_budgy() -> String {
+    "ch-api-budgy".to_string()
 }
 
 fn default_refresh_ttl_days() -> u64 {
@@ -217,6 +224,10 @@ pub fn load(path: &str) -> Result<Settings, ConfigError> {
 
     if let Some(audience_drive) = optional("JWT_AUDIENCE_DRIVE") {
         config.token.audience_drive = audience_drive;
+    }
+
+    if let Some(audience_budgy) = optional("JWT_AUDIENCE_BUDGY") {
+        config.token.audience_budgy = audience_budgy;
     }
 
     let secrets = load_secrets()?;

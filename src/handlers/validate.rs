@@ -46,10 +46,10 @@ pub async fn validate(
         return Err(AppError::Forbidden("aucun rôle attribué"));
     }
 
-    if let Some(required) = Portal::from_portal_header(portal) {
-        if !claims.roles.iter().any(|r| r == required.role_name()) {
-            return Err(AppError::Forbidden("accès non autorisé pour ce portail"));
-        }
+    let required = Portal::from_portal_header(portal)
+        .ok_or(AppError::Forbidden("portail inconnu"))?;
+    if !claims.roles.iter().any(|r| r == required.role_name()) {
+        return Err(AppError::Forbidden("accès non autorisé pour ce portail"));
     }
 
     let role = claims.roles.join(",");

@@ -126,6 +126,10 @@ fn audiences_by_role(token: &TokenConfig) -> HashMap<String, String> {
         Portal::Drive.role_name().to_string(),
         token.audience_drive.clone(),
     );
+    map.insert(
+        Portal::Budgy.role_name().to_string(),
+        token.audience_budgy.clone(),
+    );
     map
 }
 
@@ -153,6 +157,7 @@ mod tests {
             refresh_cookie_name: "ch_refresh".to_string(),
             issuer: "ch-api-authenticator".to_string(),
             audience_drive: "ch-api-drive".to_string(),
+            audience_budgy: "ch-api-budgy".to_string(),
         }
     }
 

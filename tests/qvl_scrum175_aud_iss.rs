@@ -16,6 +16,7 @@ fn token_config() -> TokenConfig {
         refresh_cookie_name: "ch_refresh".to_string(),
         issuer: ISSUER_ATTENDU.to_string(),
         audience_drive: AUDIENCE_DRIVE.to_string(),
+        audience_budgy: "ch-api-budgy".to_string(),
     }
 }
 
