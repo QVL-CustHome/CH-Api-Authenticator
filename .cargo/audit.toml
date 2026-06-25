@@ -1,0 +1,6 @@
+# SCRUM-263 — warning "unmaintained" sans vuln active.
+# RUSTSEC-2026-0173 (proc-macro-error2) : transitif figé via validator_derive 0.20
+# (derniere version publiee de validator). Aucune migration possible sans refonte.
+# A revoir si validator migre.
+[advisories]
+ignore = ["RUSTSEC-2026-0173"]
