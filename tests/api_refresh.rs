@@ -26,8 +26,8 @@ async fn refresh_with(
     post_json(
         router(state.clone()),
         "/refresh",
-        &format!(r#"{{"refresh_token": "{refresh_token}"}}"#),
-        &[],
+        "",
+        &[("Cookie", &format!("ch_refresh={refresh_token}"))],
     )
     .await
 }
@@ -184,8 +184,8 @@ async fn logout_revoque_et_expire_les_cookies() {
     let response = post_json(
         router(state.clone()),
         "/logout",
-        &format!(r#"{{"refresh_token": "{refresh_token}"}}"#),
-        &[],
+        "",
+        &[("Cookie", &format!("ch_refresh={refresh_token}"))],
     )
     .await;
     assert_eq!(response.status, StatusCode::OK);

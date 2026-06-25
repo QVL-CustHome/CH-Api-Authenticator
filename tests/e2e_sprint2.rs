@@ -105,8 +105,8 @@ async fn cycle_de_vie_complet_d_un_compte() {
     let rotated = post_json(
         router(state.clone()),
         "/refresh",
-        &format!(r#"{{"refresh_token": "{refresh}"}}"#),
-        &[],
+        "",
+        &[("Cookie", &format!("ch_refresh={refresh}"))],
     )
     .await;
     assert_eq!(rotated.status, StatusCode::OK);
@@ -128,8 +128,8 @@ async fn cycle_de_vie_complet_d_un_compte() {
     let dead = post_json(
         router(state.clone()),
         "/refresh",
-        &format!(r#"{{"refresh_token": "{refresh2}"}}"#),
-        &[],
+        "",
+        &[("Cookie", &format!("ch_refresh={refresh2}"))],
     )
     .await;
     assert_eq!(dead.status, StatusCode::UNAUTHORIZED);
@@ -147,16 +147,16 @@ async fn cycle_de_vie_complet_d_un_compte() {
     let logout = post_json(
         router(state.clone()),
         "/logout",
-        &format!(r#"{{"refresh_token": "{refresh3}"}}"#),
-        &[],
+        "",
+        &[("Cookie", &format!("ch_refresh={refresh3}"))],
     )
     .await;
     assert_eq!(logout.status, StatusCode::OK);
     let after_logout = post_json(
         router(state),
         "/refresh",
-        &format!(r#"{{"refresh_token": "{refresh3}"}}"#),
-        &[],
+        "",
+        &[("Cookie", &format!("ch_refresh={refresh3}"))],
     )
     .await;
     assert_eq!(after_logout.status, StatusCode::UNAUTHORIZED);
@@ -237,8 +237,8 @@ async fn parcours_reset_integral() {
     let dead = post_json(
         router(state),
         "/refresh",
-        &format!(r#"{{"refresh_token": "{old_refresh}"}}"#),
-        &[],
+        "",
+        &[("Cookie", &format!("ch_refresh={old_refresh}"))],
     )
     .await;
     assert_eq!(
@@ -326,8 +326,8 @@ async fn whitelist_administree_de_bout_en_bout() {
     let refus = post_json(
         router(state.clone()),
         "/refresh",
-        &format!(r#"{{"refresh_token": "{refresh}"}}"#),
-        &[],
+        "",
+        &[("Cookie", &format!("ch_refresh={refresh}"))],
     )
     .await;
     assert_eq!(

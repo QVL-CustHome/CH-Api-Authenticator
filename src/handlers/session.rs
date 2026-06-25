@@ -3,18 +3,15 @@ use crate::error::AppError;
 use crate::repository::refresh_tokens::RotationOutcome;
 use crate::services::{secure_token, whitelist};
 use crate::state::AppState;
-use crate::validation;
 use axum::Json;
-use axum::extract::rejection::JsonRejection;
 use axum::extract::{ConnectInfo, State};
 use axum::http::{HeaderMap, header};
 use axum::response::{AppendHeaders, IntoResponse};
 use mongodb::bson::oid::ObjectId;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::json;
 use std::net::SocketAddr;
 use std::time::Duration;
-use validator::Validate;
 
 #[derive(Serialize)]
 pub struct SessionBody {
@@ -101,18 +98,10 @@ pub async fn create_session_in_family(
     })
 }
 
-#[derive(Deserialize, Default, Validate)]
-pub struct RefreshRequest {
-    #[serde(default)]
-    #[validate(length(min = 1, message = "refresh token vide"))]
-    pub refresh_token: Option<String>,
-}
-
 pub async fn refresh(
     State(state): State<AppState>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     headers: HeaderMap,
-    payload: Result<Json<RefreshRequest>, JsonRejection>,
 ) -> Result<impl IntoResponse, AppError> {
     let client_ip = state.trusted_proxies.resolve(peer, &headers);
     state
@@ -120,17 +109,7 @@ pub async fn refresh(
         .refresh
         .enforce(client_ip.to_string())?;
 
-    let body = match payload {
-        Ok(Json(request)) => request,
-
-        Err(_) => RefreshRequest::default(),
-    };
-    validation::check(&body)?;
-
-    let token = body
-        .refresh_token
-        .filter(|t| !t.trim().is_empty())
-        .or_else(|| cookie_value(&headers, &state.settings.config.token.refresh_cookie_name))
+    let token = cookie_value(&headers, &state.settings.config.token.refresh_cookie_name)
         .ok_or(AppError::InvalidToken)?;
 
     let outcome = state
@@ -193,13 +172,8 @@ pub async fn refresh(
 pub async fn logout(
     State(state): State<AppState>,
     headers: HeaderMap,
-    payload: Result<Json<RefreshRequest>, JsonRejection>,
 ) -> impl IntoResponse {
-    let body = payload.map(|Json(r)| r).unwrap_or_default();
-    let token = body
-        .refresh_token
-        .filter(|t| !t.trim().is_empty())
-        .or_else(|| cookie_value(&headers, &state.settings.config.token.refresh_cookie_name));
+    let token = cookie_value(&headers, &state.settings.config.token.refresh_cookie_name);
 
     if let Some(token) = token
         && let Ok(Some(found)) = state
