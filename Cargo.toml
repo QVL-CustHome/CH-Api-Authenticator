@@ -31,6 +31,7 @@ lettre = { version = "0.11", default-features = false, features = ["smtp-transpo
 sha2 = "0.10"
 hex = "0.4"
 subtle = "2"
+rumqttc = "0.24"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

@@ -42,6 +42,8 @@ pub struct Config {
     pub email: EmailConfig,
     #[serde(default)]
     pub password_reset: PasswordResetConfig,
+    #[serde(default)]
+    pub relay: RelayConfig,
 }
 
 impl Config {
@@ -86,6 +88,55 @@ fn default_reset_url() -> String {
 
 fn default_reset_ttl() -> u64 {
     30
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RelayConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_relay_host")]
+    pub host: String,
+    #[serde(default = "default_relay_port")]
+    pub port: u16,
+    #[serde(default = "default_relay_client_id")]
+    pub client_id: String,
+    #[serde(default = "default_relay_identity")]
+    pub identity: String,
+    #[serde(default = "default_relay_token_ttl")]
+    pub token_ttl_seconds: u64,
+}
+
+impl Default for RelayConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            host: default_relay_host(),
+            port: default_relay_port(),
+            client_id: default_relay_client_id(),
+            identity: default_relay_identity(),
+            token_ttl_seconds: default_relay_token_ttl(),
+        }
+    }
+}
+
+fn default_relay_host() -> String {
+    "127.0.0.1".to_string()
+}
+
+fn default_relay_port() -> u16 {
+    1883
+}
+
+fn default_relay_client_id() -> String {
+    "ch-api-authenticator".to_string()
+}
+
+fn default_relay_identity() -> String {
+    "ch-api-authenticator".to_string()
+}
+
+fn default_relay_token_ttl() -> u64 {
+    60
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -177,6 +228,8 @@ pub struct Secrets {
     pub smtp_port: Option<u16>,
     pub smtp_user: Option<String>,
     pub smtp_password: Option<String>,
+
+    pub relay_jwt_private_key: Option<String>,
 }
 
 impl std::fmt::Debug for Secrets {
@@ -195,6 +248,10 @@ impl std::fmt::Debug for Secrets {
             .field(
                 "smtp_password",
                 &self.smtp_password.as_deref().map(|_| "***"),
+            )
+            .field(
+                "relay_jwt_private_key",
+                &self.relay_jwt_private_key.as_deref().map(|_| "***"),
             )
             .finish_non_exhaustive()
     }
@@ -292,6 +349,7 @@ fn load_secrets() -> Result<Secrets, ConfigError> {
         smtp_port: parse_optional_port("SMTP_PORT")?,
         smtp_user: optional("SMTP_USER"),
         smtp_password: optional("SMTP_PASSWORD"),
+        relay_jwt_private_key: optional("RELAY_JWT_PRIVATE_KEY"),
     })
 }
 
@@ -355,6 +413,7 @@ mod tests {
             smtp_port: None,
             smtp_user: None,
             smtp_password: None,
+            relay_jwt_private_key: None,
         }
     }
 

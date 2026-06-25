@@ -40,7 +40,19 @@ async fn main() {
         }
     };
 
-    let state = AppState::new(settings, db, mailer);
+    let relay = match services::relay::RelayPublisher::from_settings(
+        &settings.config.relay,
+        &settings.secrets,
+    ) {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::error!(error = %e, "Configuration Relay invalide");
+            eprintln!("Démarrage impossible — configuration Relay invalide : {e}");
+            std::process::exit(1);
+        }
+    };
+
+    let state = AppState::new(settings, db, mailer, relay);
 
     let indexes = async {
         state.users.ensure_indexes().await?;

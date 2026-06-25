@@ -35,3 +35,15 @@ from = "CustHome <no-reply@custhome.local>"
 url = "http://localhost:3200/reset-password"
 # Durée de vie du token one-time (minutes) — purge automatique (index TTL Mongo).
 ttl_minutes = 15
+
+[relay]
+# Publication des events métier sur le bus Relay (MQTT 5). Désactivé par défaut :
+# tant que enabled = false, les events sont seulement loggés (aucune connexion).
+enabled = false
+host = "127.0.0.1"
+port = 1883
+client_id = "ch-api-authenticator"
+# Identité (claim sub) du publisher dans le JWT présenté à Relay.
+identity = "ch-api-authenticator"
+# Durée de vie (secondes) du JWT RS256 signé pour s'authentifier auprès de Relay.
+token_ttl_seconds = 60
