@@ -149,7 +149,7 @@ async fn attribution_de_roles_visible_au_validate_apres_relogin() {
         "/validate",
         &[
             ("Authorization", &format!("Bearer {avant}")),
-            (PORTAL_HEADER, "portail_a"),
+            (PORTAL_HEADER, "portail_admin"),
         ],
     )
     .await;
@@ -171,7 +171,7 @@ async fn attribution_de_roles_visible_au_validate_apres_relogin() {
         "/validate",
         &[
             ("Authorization", &format!("Bearer {apres}")),
-            (PORTAL_HEADER, "portail_a"),
+            (PORTAL_HEADER, "portail_admin"),
         ],
     )
     .await;
@@ -191,7 +191,7 @@ async fn attribution_de_roles_visible_au_validate_apres_relogin() {
         "/validate",
         &[
             ("Authorization", &format!("Bearer {retire}")),
-            (PORTAL_HEADER, "portail_a"),
+            (PORTAL_HEADER, "portail_admin"),
         ],
     )
     .await;
