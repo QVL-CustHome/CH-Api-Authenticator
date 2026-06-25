@@ -9,6 +9,7 @@ use crate::services::client_ip::TrustedProxies;
 use crate::services::jwt::JwtService;
 use crate::services::mailer::Mailer;
 use crate::services::rate_limit::RateLimiters;
+use crate::services::relay::RelayPublisher;
 use mongodb::Database;
 use std::sync::Arc;
 
@@ -32,13 +33,15 @@ pub struct AppState {
 
     pub mailer: Arc<Mailer>,
 
+    pub relay: Arc<RelayPublisher>,
+
     pub trusted_proxies: TrustedProxies,
 
     pub rate_limiters: Arc<RateLimiters>,
 }
 
 impl AppState {
-    pub fn new(settings: Settings, db: Database, mailer: Mailer) -> Self {
+    pub fn new(settings: Settings, db: Database, mailer: Mailer, relay: RelayPublisher) -> Self {
         let jwt = Arc::new(JwtService::new(
             &settings.secrets.jwt_secret,
             &settings.config.token,
@@ -56,6 +59,7 @@ impl AppState {
             db,
             jwt,
             mailer: Arc::new(mailer),
+            relay: Arc::new(relay),
             trusted_proxies,
             rate_limiters,
         }

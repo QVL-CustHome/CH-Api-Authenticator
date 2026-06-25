@@ -1,3 +1,4 @@
+use crate::domain::events::UserDeletedEvent;
 use crate::domain::user::AccountStatus;
 use crate::error::AppError;
 use crate::handlers::me::{MeResponse, profile};
@@ -13,6 +14,7 @@ use axum::http::StatusCode;
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
+use uuid::Uuid;
 use validator::{Validate, ValidationError};
 
 fn validate_role_names(roles: &[String]) -> Result<(), ValidationError> {
@@ -331,7 +333,17 @@ pub async fn delete_user(
     }
 
     tracing::info!(admin_id = %admin.sub, target_id = %user_id, "Admin : compte supprimé");
+
+    let event = UserDeletedEvent::new(Uuid::new_v4().to_string(), user_id.to_hex(), now_rfc3339());
+    state.relay.publish_user_deleted(&event).await;
+
     Ok(StatusCode::NO_CONTENT)
+}
+
+fn now_rfc3339() -> String {
+    mongodb::bson::DateTime::now()
+        .try_to_rfc3339_string()
+        .unwrap_or_default()
 }
 
 #[derive(Deserialize, Validate)]

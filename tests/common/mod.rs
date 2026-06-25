@@ -92,6 +92,7 @@ pub fn state_with_mailer(
                 },
                 email: EmailConfig::default(),
                 password_reset: PasswordResetConfig::default(),
+                relay: ch_api_authenticator::config::RelayConfig::default(),
             },
             secrets: Secrets {
                 jwt_secret: JWT_SECRET.to_string(),
@@ -103,6 +104,7 @@ pub fn state_with_mailer(
                 smtp_port: None,
                 smtp_user: None,
                 smtp_password: None,
+                relay_jwt_private_key: None,
             },
             rate_limit: ch_api_authenticator::services::rate_limit::RateLimitConfig {
                 login: ch_api_authenticator::services::rate_limit::RateLimitRule {
@@ -121,6 +123,7 @@ pub fn state_with_mailer(
         },
         db.clone(),
         mailer,
+        ch_api_authenticator::services::relay::RelayPublisher::Disabled,
     )
 }
 

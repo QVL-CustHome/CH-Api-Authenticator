@@ -3,5 +3,6 @@ pub mod jwt;
 pub mod mailer;
 pub mod password;
 pub mod rate_limit;
+pub mod relay;
 pub mod secure_token;
 pub mod whitelist;

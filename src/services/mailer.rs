@@ -130,6 +130,7 @@ mod tests {
                     from: from.to_string(),
                 },
                 password_reset: crate::config::PasswordResetConfig::default(),
+                relay: crate::config::RelayConfig::default(),
             },
             secrets: Secrets {
                 jwt_secret: "un-secret-de-test-suffisamment-long!!!!!".to_string(),
@@ -141,6 +142,7 @@ mod tests {
                 smtp_port: None,
                 smtp_user: None,
                 smtp_password: None,
+                relay_jwt_private_key: None,
             },
             rate_limit: crate::services::rate_limit::RateLimitConfig {
                 login: crate::services::rate_limit::RateLimitRule {
