@@ -23,6 +23,12 @@ pub enum AppError {
     #[error("{0}")]
     NotFound(&'static str),
 
+    #[error("l'acceptation des conditions générales d'utilisation est requise")]
+    TermsNotAccepted,
+
+    #[error("la version des conditions générales d'utilisation acceptée n'est pas la version courante")]
+    TermsVersionMismatch,
+
     #[error("compte en attente de validation par un administrateur")]
     AccountPending,
 
@@ -62,6 +68,10 @@ impl IntoResponse for AppError {
             AppError::InvalidToken => (StatusCode::UNAUTHORIZED, "unauthorized"),
             AppError::Forbidden(_) => (StatusCode::FORBIDDEN, "forbidden"),
             AppError::Conflict(_) => (StatusCode::CONFLICT, "conflict"),
+            AppError::TermsNotAccepted => (StatusCode::UNPROCESSABLE_ENTITY, "terms_not_accepted"),
+            AppError::TermsVersionMismatch => {
+                (StatusCode::UNPROCESSABLE_ENTITY, "terms_version_mismatch")
+            }
             AppError::NotFound(_) => (StatusCode::NOT_FOUND, "not_found"),
             AppError::AccountPending => (StatusCode::FORBIDDEN, "account_pending"),
             AppError::AccountDisabled => (StatusCode::FORBIDDEN, "account_disabled"),

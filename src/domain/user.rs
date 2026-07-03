@@ -26,6 +26,12 @@ pub struct User {
 
     #[serde(default)]
     pub allowed_ips: Vec<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terms_accepted_at: Option<DateTime>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terms_version: Option<String>,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }
@@ -88,9 +94,16 @@ impl User {
             status: AccountStatus::Active,
             whitelist_only: false,
             allowed_ips: Vec::new(),
+            terms_accepted_at: None,
+            terms_version: None,
             created_at: now,
             updated_at: now,
         }
+    }
+
+    pub fn accept_terms(&mut self, version: &str) {
+        self.terms_accepted_at = Some(DateTime::now());
+        self.terms_version = Some(version.to_string());
     }
 }
 

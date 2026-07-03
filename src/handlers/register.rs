@@ -1,3 +1,4 @@
+use crate::domain::terms::CURRENT_TERMS_VERSION;
 use crate::domain::user::{AccountStatus, User};
 use crate::error::AppError;
 use crate::repository::users::RepositoryError;
@@ -21,6 +22,9 @@ pub struct RegisterRequest {
     pub email: String,
     #[validate(custom(function = "crate::validation::validate_password_strength"))]
     pub password: String,
+
+    #[serde(default)]
+    pub accepted_terms_version: Option<String>,
 }
 
 pub async fn register(
@@ -43,6 +47,16 @@ pub async fn register(
         return Err(AppError::Validation("le nom est requis".to_string()));
     }
 
+    let accepted_version = request
+        .accepted_terms_version
+        .as_deref()
+        .map(str::trim)
+        .filter(|version| !version.is_empty())
+        .ok_or(AppError::TermsNotAccepted)?;
+    if accepted_version != CURRENT_TERMS_VERSION {
+        return Err(AppError::TermsVersionMismatch);
+    }
+
     let password_hash = password::hash(&request.password).map_err(|_| AppError::Internal)?;
 
     let mut user = User::new(
@@ -52,6 +66,7 @@ pub async fn register(
     );
     user.name = request.name.trim().to_string();
     user.status = AccountStatus::PendingValidation;
+    user.accept_terms(CURRENT_TERMS_VERSION);
 
     match state.users.insert(&user).await {
         Ok(id) => Ok((StatusCode::CREATED, Json(json!({ "user_id": id.to_hex() })))),
