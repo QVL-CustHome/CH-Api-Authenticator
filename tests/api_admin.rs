@@ -320,7 +320,7 @@ async fn activation_desactivation_via_status_pilote_le_login() {
     let register = post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Pending", "email": "pending@test.fr", "password": "Bon-Mot-De-Passe1"}"#,
+        r#"{"name": "Pending", "email": "pending@test.fr", "password": "Bon-Mot-De-Passe1", "accepted_terms_version": "v1"}"#,
         &[],
     )
     .await;
@@ -372,7 +372,7 @@ async fn liste_des_comptes_en_attente() {
         post_json(
             router(state.clone()),
             "/register",
-            &format!(r#"{{"name": "Test", "email": "{email}", "password": "Bon-Mot-De-Passe1"}}"#),
+            &format!(r#"{{"name": "Test", "email": "{email}", "password": "Bon-Mot-De-Passe1", "accepted_terms_version": "v1"}}"#),
             &[],
         )
         .await;
