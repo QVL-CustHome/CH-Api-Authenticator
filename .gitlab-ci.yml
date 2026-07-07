@@ -1,0 +1,18 @@
+# CI/CD CH-Api-Authenticator — base commune : template rust QVL-ToolBox/PipeLine
+include:
+  - remote: "https://raw.githubusercontent.com/QVL-ToolBox/PipeLine/main/rust.gitlab-ci.yml"
+
+stages:
+  - test
+  - build
+  - deploy
+
+# deploiement sur le serveur QVL : binaire -> /opt/custhome/ch-api-authenticator + restart systemd
+deploy:
+  stage: deploy
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  dependencies:
+    - build
+  script:
+    - sudo /usr/local/bin/ch-deploy-bin ch-api-authenticator "$CI_PROJECT_DIR/target/release/ch-api-authenticator"
