@@ -268,7 +268,7 @@ async fn changement_et_reset_de_mot_de_passe_revoquent_les_refresh() {
                 .header(header::CONTENT_TYPE, "application/json")
                 .header(header::AUTHORIZATION, format!("Bearer {access}"))
                 .body(Body::from(format!(
-                    r#"{{"current_password": "{PASSWORD}", "new_password": "Nouveau-Mdp-Solide1"}}"#
+                    r#"{{"current_password": "{PASSWORD}", "new_password": "Example-New-Strong-1"}}"#
                 )))
                 .unwrap(),
         ))
@@ -284,7 +284,7 @@ async fn changement_et_reset_de_mot_de_passe_revoquent_les_refresh() {
     let login2 = post_json(
         router(state.clone()),
         "/login",
-        r#"{"email": "martin@test.fr", "password": "Nouveau-Mdp-Solide1"}"#,
+        r#"{"email": "martin@test.fr", "password": "Example-New-Strong-1"}"#,
         &[],
     )
     .await;

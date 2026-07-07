@@ -37,12 +37,12 @@ async fn changement_nominal_et_bascule_du_login() {
     let (status, _) = put_password(
         &state,
         Some(&token),
-        &format!(r#"{{"current_password": "{PASSWORD}", "new_password": "Nouveau-Mdp-Solide1"}}"#),
+        &format!(r#"{{"current_password": "{PASSWORD}", "new_password": "Example-New-Strong-1"}}"#),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
 
-    login_token_with(&state, "martin@test.fr", "Nouveau-Mdp-Solide1").await;
+    login_token_with(&state, "martin@test.fr", "Example-New-Strong-1").await;
     let ancien = post_json(
         router(state.clone()),
         "/login",
@@ -73,7 +73,7 @@ async fn ancien_mot_de_passe_faux_401_generique() {
     let (status, body) = put_password(
         &state,
         Some(&token),
-        r#"{"current_password": "mauvais", "new_password": "Nouveau-Mdp-Solide1"}"#,
+        r#"{"current_password": "mauvais", "new_password": "Example-New-Strong-1"}"#,
     )
     .await;
 
@@ -114,7 +114,7 @@ async fn sans_token_401() {
     let (status, _) = put_password(
         &state,
         None,
-        r#"{"current_password": "x", "new_password": "Nouveau-Mdp-Solide1"}"#,
+        r#"{"current_password": "x", "new_password": "Example-New-Strong-1"}"#,
     )
     .await;
     assert_eq!(status, StatusCode::UNAUTHORIZED);

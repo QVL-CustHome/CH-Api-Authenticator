@@ -67,18 +67,14 @@ where
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum AccountStatus {
+    #[default]
     PendingValidation,
 
     Active,
 
     Disabled,
-}
-
-impl Default for AccountStatus {
-    fn default() -> Self {
-        AccountStatus::PendingValidation
-    }
 }
 
 impl User {

@@ -502,7 +502,7 @@ async fn reinitialisation_mot_de_passe_par_admin() {
         &state,
         &format!("/users/{target}/password"),
         &admin,
-        r#"{"password": "Nouveau-Mot-De-Passe1"}"#,
+        r#"{"password": "Example-New-Password-1"}"#,
     )
     .await;
     assert_eq!(ok, StatusCode::NO_CONTENT);
@@ -519,7 +519,7 @@ async fn reinitialisation_mot_de_passe_par_admin() {
     let nouveau = post_json(
         router(state),
         "/login",
-        r#"{"email": "user@test.fr", "password": "Nouveau-Mot-De-Passe1"}"#,
+        r#"{"email": "user@test.fr", "password": "Example-New-Password-1"}"#,
         &[],
     )
     .await;

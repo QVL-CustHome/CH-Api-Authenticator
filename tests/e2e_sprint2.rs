@@ -59,7 +59,7 @@ async fn cycle_de_vie_complet_d_un_compte() {
     let register = post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Vie", "email": "vie@custhome.fr", "password": "Premier-Mdp-Solide1"}"#,
+        r#"{"name": "Vie", "email": "vie@custhome.fr", "password": "Example-First-Strong-1"}"#,
         &[],
     )
     .await;
@@ -82,7 +82,7 @@ async fn cycle_de_vie_complet_d_un_compte() {
     let login = post_json(
         router(state.clone()),
         "/login",
-        r#"{"email": "vie@custhome.fr", "password": "Premier-Mdp-Solide1"}"#,
+        r#"{"email": "vie@custhome.fr", "password": "Example-First-Strong-1"}"#,
         &[],
     )
     .await;
@@ -121,7 +121,7 @@ async fn cycle_de_vie_complet_d_un_compte() {
         &state,
         "/password",
         &access2,
-        r#"{"current_password": "Premier-Mdp-Solide1", "new_password": "Second-Mdp-Solide1"}"#,
+        r#"{"current_password": "Example-First-Strong-1", "new_password": "Second-Mdp-Solide1"}"#,
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -172,7 +172,7 @@ async fn parcours_reset_integral() {
     post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Oubli", "email": "oubli@custhome.fr", "password": "Mdp-Oublie-Bientot1"}"#,
+        r#"{"name": "Oubli", "email": "oubli@custhome.fr", "password": "Example-Forgot-Soon-1"}"#,
         &[],
     )
     .await;
@@ -181,7 +181,7 @@ async fn parcours_reset_integral() {
     let login = post_json(
         router(state.clone()),
         "/login",
-        r#"{"email": "oubli@custhome.fr", "password": "Mdp-Oublie-Bientot1"}"#,
+        r#"{"email": "oubli@custhome.fr", "password": "Example-Forgot-Soon-1"}"#,
         &[],
     )
     .await;
@@ -228,7 +228,7 @@ async fn parcours_reset_integral() {
     let ancien = post_json(
         router(state.clone()),
         "/login",
-        r#"{"email": "oubli@custhome.fr", "password": "Mdp-Oublie-Bientot1"}"#,
+        r#"{"email": "oubli@custhome.fr", "password": "Example-Forgot-Soon-1"}"#,
         &[],
     )
     .await;

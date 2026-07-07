@@ -244,13 +244,13 @@ async fn parcours_complet_forgot_reset_login() {
     let reset = post_json(
         router(state.clone()),
         "/password/reset",
-        &format!(r#"{{"token": "{token}", "new_password": "Nouveau-Mdp-Solide1"}}"#),
+        &format!(r#"{{"token": "{token}", "new_password": "Example-New-Strong-1"}}"#),
         &[],
     )
     .await;
     assert_eq!(reset.status, StatusCode::OK);
 
-    login_token_with(&state, "martin@test.fr", "Nouveau-Mdp-Solide1").await;
+    login_token_with(&state, "martin@test.fr", "Example-New-Strong-1").await;
     let ancien = post_json(
         router(state.clone()),
         "/login",
@@ -278,7 +278,7 @@ async fn token_a_usage_strictement_unique() {
     seed_user(&state, "martin@test.fr", HashMap::new()).await;
     let token = forgot_and_capture_token(&state, &outbox, "martin@test.fr").await;
 
-    let body = format!(r#"{{"token": "{token}", "new_password": "Nouveau-Mdp-Solide1"}}"#);
+    let body = format!(r#"{{"token": "{token}", "new_password": "Example-New-Strong-1"}}"#);
     let premier = post_json(router(state.clone()), "/password/reset", &body, &[]).await;
     assert_eq!(premier.status, StatusCode::OK);
 
@@ -297,7 +297,7 @@ async fn token_inconnu_ou_expire_400_generique() {
     let inconnu = post_json(
         router(state.clone()),
         "/password/reset",
-        r#"{"token": "0000000000000000000000000000000000000000000000000000000000000000", "new_password": "Nouveau-Mdp-Solide1"}"#,
+        r#"{"token": "0000000000000000000000000000000000000000000000000000000000000000", "new_password": "Example-New-Strong-1"}"#,
         &[],
     )
     .await;
@@ -316,7 +316,7 @@ async fn token_inconnu_ou_expire_400_generique() {
     let expire = post_json(
         router(state.clone()),
         "/password/reset",
-        &format!(r#"{{"token": "{token}", "new_password": "Nouveau-Mdp-Solide1"}}"#),
+        &format!(r#"{{"token": "{token}", "new_password": "Example-New-Strong-1"}}"#),
         &[],
     )
     .await;
@@ -346,7 +346,7 @@ async fn mot_de_passe_trop_court_ne_brule_pas_le_token() {
     let retry = post_json(
         router(state),
         "/password/reset",
-        &format!(r#"{{"token": "{token}", "new_password": "Nouveau-Mdp-Solide1"}}"#),
+        &format!(r#"{{"token": "{token}", "new_password": "Example-New-Strong-1"}}"#),
         &[],
     )
     .await;

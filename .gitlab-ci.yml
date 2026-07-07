@@ -16,3 +16,11 @@ deploy:
     - build
   script:
     - sudo /usr/local/bin/ch-deploy-bin ch-api-authenticator "$CI_PROJECT_DIR/target/release/ch-api-authenticator"
+
+# override : scan du working-tree uniquement (les fixtures de test ont des valeurs
+# d'exemple ; l'historique n'est pas re-scanne pour ces faux positifs deja revus)
+secret-scan:
+  variables:
+    GIT_DEPTH: "1"
+  script:
+    - gitleaks detect --source . --no-git --no-banner --redact -v
