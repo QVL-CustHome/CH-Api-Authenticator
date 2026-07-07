@@ -26,7 +26,7 @@ async fn parcours_nominal_register_login_validate_multi_portail() {
     let register = post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "E2E", "email": "E2E@CustHome.FR", "password": "Motdepasse-E2e1"}"#,
+        r#"{"name": "E2E", "email": "E2E@CustHome.FR", "password": "Motdepasse-E2e1", "accepted_terms_version": "v1"}"#,
         &[],
     )
     .await;
@@ -98,7 +98,7 @@ async fn parcours_whitelist_de_bout_en_bout() {
     let register = post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "WL", "email": "wl.e2e@custhome.fr", "password": "Motdepasse-E2e1"}"#,
+        r#"{"name": "WL", "email": "wl.e2e@custhome.fr", "password": "Motdepasse-E2e1", "accepted_terms_version": "v1"}"#,
         &[],
     )
     .await;
@@ -165,7 +165,7 @@ async fn cascade_des_cas_d_erreur_sur_un_vrai_compte() {
     post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Err", "email": "err.e2e@custhome.fr", "password": "Motdepasse-E2e1"}"#,
+        r#"{"name": "Err", "email": "err.e2e@custhome.fr", "password": "Motdepasse-E2e1", "accepted_terms_version": "v1"}"#,
         &[],
     )
     .await;
@@ -245,7 +245,7 @@ async fn compte_neuf_sans_roles_refuse_sur_tous_les_portails() {
     post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Neuf", "email": "neuf@custhome.fr", "password": "Motdepasse-E2e1"}"#,
+        r#"{"name": "Neuf", "email": "neuf@custhome.fr", "password": "Motdepasse-E2e1", "accepted_terms_version": "v1"}"#,
         &[],
     )
     .await;

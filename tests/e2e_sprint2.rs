@@ -59,7 +59,7 @@ async fn cycle_de_vie_complet_d_un_compte() {
     let register = post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Vie", "email": "vie@custhome.fr", "password": "Example-First-Strong-1"}"#,
+        r#"{"name": "Vie", "email": "vie@custhome.fr", "password": "Example-First-Strong-1", "accepted_terms_version": "v1"}"#,
         &[],
     )
     .await;
@@ -172,7 +172,7 @@ async fn parcours_reset_integral() {
     post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Oubli", "email": "oubli@custhome.fr", "password": "Example-Forgot-Soon-1"}"#,
+        r#"{"name": "Oubli", "email": "oubli@custhome.fr", "password": "Example-Forgot-Soon-1", "accepted_terms_version": "v1"}"#,
         &[],
     )
     .await;

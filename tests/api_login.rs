@@ -226,7 +226,7 @@ async fn login_compte_en_attente_refuse_403() {
     post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Attente", "email": "attente@test.fr", "password": "Bon-Mot-De-Passe1"}"#,
+        r#"{"name": "Attente", "email": "attente@test.fr", "password": "Bon-Mot-De-Passe1", "accepted_terms_version": "v1"}"#,
         &[],
     )
     .await;
@@ -282,7 +282,7 @@ async fn login_apres_validation_200() {
     post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Valide", "email": "valide@test.fr", "password": "Bon-Mot-De-Passe1"}"#,
+        r#"{"name": "Valide", "email": "valide@test.fr", "password": "Bon-Mot-De-Passe1", "accepted_terms_version": "v1"}"#,
         &[],
     )
     .await;
