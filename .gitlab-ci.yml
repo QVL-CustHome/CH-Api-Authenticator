@@ -24,3 +24,8 @@ secret-scan:
     GIT_DEPTH: "1"
   script:
     - gitleaks detect --source . --no-git --no-banner --redact -v
+
+# override : execution serialisee (evite les collisions sur bases/ports partages)
+test:
+  script:
+    - cargo test -- --test-threads=1
