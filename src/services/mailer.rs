@@ -21,7 +21,6 @@ pub enum Mailer {
 }
 
 impl Mailer {
-
     pub fn from_settings(settings: &Settings) -> Result<Self, String> {
         match settings.config.email.mode {
             EmailMode::Dev => Ok(Mailer::Dev),

@@ -16,7 +16,6 @@ pub struct RefreshToken {
 }
 
 pub enum RotationOutcome {
-
     Rotated(RefreshToken),
 
     ReuseDetected(RefreshToken),

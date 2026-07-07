@@ -42,8 +42,7 @@ fn public_routes() -> Router<AppState> {
         .route("/password", put(handlers::password::change))
         .route(
             "/settings/registration",
-            get(handlers::settings::get_registration)
-                .put(handlers::settings::update_registration),
+            get(handlers::settings::get_registration).put(handlers::settings::update_registration),
         )
         .route(
             "/me",

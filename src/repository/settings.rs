@@ -24,7 +24,10 @@ impl SettingsRepository {
     }
 
     pub async fn registration_enabled(&self) -> Result<bool, mongodb::error::Error> {
-        let settings = self.collection.find_one(doc! { "_id": SETTINGS_ID }).await?;
+        let settings = self
+            .collection
+            .find_one(doc! { "_id": SETTINGS_ID })
+            .await?;
         Ok(settings.map(|s| s.registration_enabled).unwrap_or(true))
     }
 

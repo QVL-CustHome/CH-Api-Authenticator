@@ -57,10 +57,7 @@ fn is_authorized(provided: &str, expected: &str) -> bool {
     if provided.is_empty() {
         return false;
     }
-    provided
-        .as_bytes()
-        .ct_eq(expected.as_bytes())
-        .into()
+    provided.as_bytes().ct_eq(expected.as_bytes()).into()
 }
 
 #[cfg(test)]

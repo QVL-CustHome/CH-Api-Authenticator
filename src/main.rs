@@ -9,7 +9,6 @@ use ch_api_authenticator::state::AppState;
 
 #[tokio::main]
 async fn main() {
-
     dotenvy::dotenv().ok();
 
     let settings = match config::load("config.toml") {

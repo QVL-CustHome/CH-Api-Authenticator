@@ -68,7 +68,10 @@ async fn route_interne_non_versionnee() {
         router(state),
         "/internal/users/resolve",
         r#"{"ids": []}"#,
-        &[("x-internal-secret", "un-secret-interne-de-test-suffisamment-long!")],
+        &[(
+            "x-internal-secret",
+            "un-secret-interne-de-test-suffisamment-long!",
+        )],
     )
     .await;
     assert_eq!(interne.status, StatusCode::OK);

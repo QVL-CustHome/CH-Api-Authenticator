@@ -50,7 +50,6 @@ pub async fn login(
         })?;
 
     let Some(user) = user else {
-
         password::verify(&request.password, &DUMMY_HASH);
         return Err(AppError::Unauthorized);
     };

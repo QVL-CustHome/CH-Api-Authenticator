@@ -102,7 +102,6 @@ async fn toutes_les_lignes_de_log_portent_le_correlation_id() {
     let state = test_state(&db).await;
 
     let (writer, _) = with_json_logs(async {
-
         get(
             router(state.clone()),
             "/validate",
@@ -156,7 +155,6 @@ async fn jamais_de_mot_de_passe_ni_token_dans_les_logs() {
     seed_user(&state, "martin@test.fr", HashMap::new()).await;
 
     let (writer, token) = with_json_logs(async {
-
         post_json(
             router(state.clone()),
             "/register",

@@ -26,7 +26,9 @@ pub enum AppError {
     #[error("l'acceptation des conditions générales d'utilisation est requise")]
     TermsNotAccepted,
 
-    #[error("la version des conditions générales d'utilisation acceptée n'est pas la version courante")]
+    #[error(
+        "la version des conditions générales d'utilisation acceptée n'est pas la version courante"
+    )]
     TermsVersionMismatch,
 
     #[error("compte en attente de validation par un administrateur")]
@@ -76,7 +78,9 @@ impl IntoResponse for AppError {
             AppError::AccountPending => (StatusCode::FORBIDDEN, "account_pending"),
             AppError::AccountDisabled => (StatusCode::FORBIDDEN, "account_disabled"),
             AppError::DeviceNotAllowed => (StatusCode::FORBIDDEN, "device_not_allowed"),
-            AppError::TooManyRequests { .. } => (StatusCode::TOO_MANY_REQUESTS, "too_many_requests"),
+            AppError::TooManyRequests { .. } => {
+                (StatusCode::TOO_MANY_REQUESTS, "too_many_requests")
+            }
             AppError::Internal => (StatusCode::INTERNAL_SERVER_ERROR, "internal_error"),
         };
         let body = json!({ "error": error, "message": self.to_string() });

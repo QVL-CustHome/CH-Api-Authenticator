@@ -104,10 +104,7 @@ pub async fn refresh(
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, AppError> {
     let client_ip = state.trusted_proxies.resolve(peer, &headers);
-    state
-        .rate_limiters
-        .refresh
-        .enforce(client_ip.to_string())?;
+    state.rate_limiters.refresh.enforce(client_ip.to_string())?;
 
     let token = cookie_value(&headers, &state.settings.config.token.refresh_cookie_name)
         .ok_or(AppError::InvalidToken)?;
@@ -169,10 +166,7 @@ pub async fn refresh(
     create_session_in_family(&state, &user, token_ip, consumed.family_id).await
 }
 
-pub async fn logout(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> impl IntoResponse {
+pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> impl IntoResponse {
     let token = cookie_value(&headers, &state.settings.config.token.refresh_cookie_name);
 
     if let Some(token) = token

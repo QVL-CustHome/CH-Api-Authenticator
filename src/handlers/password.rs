@@ -178,7 +178,6 @@ pub async fn reset(
         })?;
 
     if !updated {
-
         return Err(AppError::Validation("token invalide ou expiré".to_string()));
     }
 

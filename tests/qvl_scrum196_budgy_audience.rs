@@ -130,7 +130,10 @@ fn ac1_ac4_utilisateur_drive_et_budgy_cumule_les_deux_audiences() {
 
 #[test]
 fn ac5_header_portail_budgy_resout_le_portail_budgy() {
-    assert_eq!(Portal::from_portal_header("portail_budgy"), Some(Portal::Budgy));
+    assert_eq!(
+        Portal::from_portal_header("portail_budgy"),
+        Some(Portal::Budgy)
+    );
 }
 
 #[test]
@@ -150,7 +153,10 @@ fn ac5_header_inconnu_ne_resout_aucun_portail() {
 
 #[test]
 fn ac5_ensemble_des_portails_connus_inclut_budgy_sans_perdre_les_existants() {
-    let connus: Vec<&'static str> = Portal::ALL.iter().map(|portal| portal.role_name()).collect();
+    let connus: Vec<&'static str> = Portal::ALL
+        .iter()
+        .map(|portal| portal.role_name())
+        .collect();
 
     assert!(connus.contains(&"admin"));
     assert!(connus.contains(&"drive"));
@@ -173,8 +179,20 @@ fn f1_header_portail_valeur_inconnue_typo_budgy_ne_resout_aucun_portail() {
 
 #[test]
 fn f1_headers_portail_valides_resolvent_chacun_leur_portail() {
-    assert_eq!(Portal::from_portal_header("portail_admin"), Some(Portal::Admin));
-    assert_eq!(Portal::from_portal_header("portail_drive"), Some(Portal::Drive));
-    assert_eq!(Portal::from_portal_header("portail_home"), Some(Portal::Home));
-    assert_eq!(Portal::from_portal_header("portail_budgy"), Some(Portal::Budgy));
+    assert_eq!(
+        Portal::from_portal_header("portail_admin"),
+        Some(Portal::Admin)
+    );
+    assert_eq!(
+        Portal::from_portal_header("portail_drive"),
+        Some(Portal::Drive)
+    );
+    assert_eq!(
+        Portal::from_portal_header("portail_home"),
+        Some(Portal::Home)
+    );
+    assert_eq!(
+        Portal::from_portal_header("portail_budgy"),
+        Some(Portal::Budgy)
+    );
 }

@@ -2,9 +2,9 @@ mod common;
 
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
-use ch_api_authenticator::services::client_ip::CLIENT_IP_HEADER;
 use ch_api_authenticator::handlers::validate::PORTAL_HEADER;
 use ch_api_authenticator::routes::router;
+use ch_api_authenticator::services::client_ip::CLIENT_IP_HEADER;
 use common::*;
 use std::time::Duration;
 

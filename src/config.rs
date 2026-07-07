@@ -9,7 +9,6 @@ pub const MIN_INTERNAL_API_SECRET_BYTES: usize = 32;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
-
     #[error("fichier de configuration invalide : {0}")]
     File(Box<figment::Error>),
     #[error("variable d'environnement requise manquante ou vide : {0}")]
@@ -65,7 +64,6 @@ pub enum Environment {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct PasswordResetConfig {
-
     #[serde(default = "default_reset_url")]
     pub url: String,
 
@@ -148,7 +146,6 @@ pub struct ServerConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct TokenConfig {
-
     pub ttl_minutes: u64,
 
     pub cookie_name: String,
@@ -194,7 +191,6 @@ fn default_refresh_cookie_name() -> String {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct RegistrationConfig {
-
     #[serde(default)]
     pub default_roles: Vec<String>,
 }
