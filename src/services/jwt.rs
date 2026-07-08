@@ -150,6 +150,7 @@ mod tests {
 
     fn token_config(ttl_minutes: u64) -> TokenConfig {
         TokenConfig {
+            cookie_domain: None,
             ttl_minutes,
             cookie_name: "ch_token".to_string(),
             cookie_secure: false,

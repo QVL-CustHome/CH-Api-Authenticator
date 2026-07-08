@@ -167,6 +167,9 @@ pub struct TokenConfig {
 
     #[serde(default = "default_audience_budgy")]
     pub audience_budgy: String,
+
+    #[serde(default)]
+    pub cookie_domain: Option<String>,
 }
 
 fn default_jwt_issuer() -> String {

@@ -9,6 +9,7 @@ const AUDIENCE_DRIVE: &str = "ch-api-drive";
 
 fn token_config() -> TokenConfig {
     TokenConfig {
+        cookie_domain: None,
         ttl_minutes: 15,
         cookie_name: "ch_token".to_string(),
         cookie_secure: false,

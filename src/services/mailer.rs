@@ -114,6 +114,7 @@ mod tests {
                     log_level: "INFO".to_string(),
                 },
                 token: TokenConfig {
+                    cookie_domain: None,
                     ttl_minutes: 15,
                     cookie_name: "ch_token".to_string(),
                     cookie_secure: false,

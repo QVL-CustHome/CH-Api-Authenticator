@@ -11,6 +11,7 @@ const AUDIENCE_BUDGY: &str = "ch-api-budgy";
 
 fn token_config() -> TokenConfig {
     TokenConfig {
+        cookie_domain: None,
         ttl_minutes: 15,
         cookie_name: "ch_token".to_string(),
         cookie_secure: false,

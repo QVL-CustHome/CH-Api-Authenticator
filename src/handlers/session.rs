@@ -79,12 +79,14 @@ pub async fn create_session_in_family(
             &access_token,
             state.jwt.ttl_seconds(),
             cookie_secure,
+            token_config.cookie_domain.as_deref(),
         ),
         build_cookie(
             &token_config.refresh_cookie_name,
             &refresh_token,
             refresh_ttl.as_secs(),
             cookie_secure,
+            token_config.cookie_domain.as_deref(),
         ),
     ];
 
@@ -186,8 +188,20 @@ pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> impl I
     let token_config = &state.settings.config.token;
     let cookie_secure = state.settings.config.cookie_secure_effective();
     let expired = [
-        build_cookie(&token_config.cookie_name, "", 0, cookie_secure),
-        build_cookie(&token_config.refresh_cookie_name, "", 0, cookie_secure),
+        build_cookie(
+            &token_config.cookie_name,
+            "",
+            0,
+            cookie_secure,
+            token_config.cookie_domain.as_deref(),
+        ),
+        build_cookie(
+            &token_config.refresh_cookie_name,
+            "",
+            0,
+            cookie_secure,
+            token_config.cookie_domain.as_deref(),
+        ),
     ];
     (
         AppendHeaders([
@@ -198,8 +212,17 @@ pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> impl I
     )
 }
 
-fn build_cookie(name: &str, value: &str, max_age: u64, secure: bool) -> String {
+fn build_cookie(
+    name: &str,
+    value: &str,
+    max_age: u64,
+    secure: bool,
+    domain: Option<&str>,
+) -> String {
     let mut cookie = format!("{name}={value}; HttpOnly; SameSite=Lax; Path=/; Max-Age={max_age}");
+    if let Some(d) = domain.filter(|d| !d.is_empty()) {
+        cookie.push_str(&format!("; Domain={d}"));
+    }
     if secure {
         cookie.push_str("; Secure");
     }
