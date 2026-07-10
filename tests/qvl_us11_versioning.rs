@@ -17,7 +17,7 @@ async fn route_publique_exposee_sous_v1() {
         &format!("{API_VERSION_PREFIX}/validate"),
         &[
             ("Authorization", &format!("Bearer {token}")),
-            (PORTAL_HEADER, "portail_a"),
+            (PORTAL_HEADER, "portail_admin"),
         ],
     )
     .await;
@@ -40,7 +40,7 @@ async fn route_publique_legacy_sans_prefixe_toujours_disponible() {
         "/validate",
         &[
             ("Authorization", &format!("Bearer {token}")),
-            (PORTAL_HEADER, "portail_a"),
+            (PORTAL_HEADER, "portail_admin"),
         ],
     )
     .await;

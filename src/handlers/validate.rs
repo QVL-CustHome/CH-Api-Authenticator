@@ -35,21 +35,10 @@ pub async fn validate(
         }
     }
 
-    let portal = headers
-        .get(PORTAL_HEADER)
-        .and_then(|v| v.to_str().ok())
-        .map(str::trim)
-        .filter(|p| !p.is_empty())
-        .ok_or_else(|| AppError::Validation("header X-Portal manquant".to_string()))?;
+    require_known_portal(&headers)?;
 
     if claims.roles.is_empty() {
         return Err(AppError::Forbidden("aucun rôle attribué"));
-    }
-
-    let required =
-        Portal::from_portal_header(portal).ok_or(AppError::Forbidden("portail inconnu"))?;
-    if !claims.roles.iter().any(|r| r == required.role_name()) {
-        return Err(AppError::Forbidden("accès non autorisé pour ce portail"));
     }
 
     let role = claims.roles.join(",");
@@ -58,6 +47,19 @@ pub async fn validate(
         user_id: claims.sub,
         role,
     }))
+}
+
+fn require_known_portal(headers: &HeaderMap) -> Result<(), AppError> {
+    let portal = headers
+        .get(PORTAL_HEADER)
+        .and_then(|v| v.to_str().ok())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| AppError::Validation("header X-Portal manquant".to_string()))?;
+    if Portal::from_portal_header(portal).is_none() {
+        return Err(AppError::Forbidden("portail inconnu"));
+    }
+    Ok(())
 }
 
 fn bearer_token(headers: &HeaderMap) -> Option<&str> {

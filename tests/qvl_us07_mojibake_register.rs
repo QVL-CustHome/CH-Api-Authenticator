@@ -34,7 +34,7 @@ async fn email_deja_utilise_409_message_utf8_lisible() {
     let response = post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Doublon", "email": "Doublon@Test.FR", "password": "Motdepasse1!"}"#,
+        r#"{"name": "Doublon", "email": "Doublon@Test.FR", "password": "Bon-Mot-De-Passe1", "accepted_terms_version": "v1"}"#,
         &[],
     )
     .await;
@@ -57,7 +57,7 @@ async fn message_409_sans_caracteres_parasites() {
     let response = post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Parasite", "email": "parasite@test.fr", "password": "Motdepasse1!"}"#,
+        r#"{"name": "Parasite", "email": "parasite@test.fr", "password": "Bon-Mot-De-Passe1", "accepted_terms_version": "v1"}"#,
         &[],
     )
     .await;
