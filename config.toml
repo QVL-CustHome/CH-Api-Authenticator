@@ -24,11 +24,10 @@ refresh_cookie_name = "ch_refresh"
 # Vide par défaut : l'attribution passe par les endpoints d'administration.
 default_roles = []
 
-[email]
-# dev : les emails sont loggés (WARN) au lieu d'être envoyés — aucun serveur requis.
-# smtp : envoi réel via lettre (secrets SMTP_* dans l'environnement, voir .env.example).
-mode = "dev"
-from = "CustHome <no-reply@custhome.local>"
+[missive]
+# Service d'envoi des emails (reset de mot de passe). L'appel POST {url}/v1/send est
+# authentifie par MISSIVE_API_SECRET (environnement). Surcharge : env MISSIVE_URL.
+url = "http://localhost:8184"
 
 [password_reset]
 # Page du front d'auth qui consommera le token : {url}?token=...

@@ -7,11 +7,7 @@ use common::*;
 use std::collections::HashMap;
 use std::time::Duration;
 
-async fn wait_for_email(
-    outbox: &std::sync::Arc<
-        std::sync::Mutex<Vec<ch_api_authenticator::services::mailer::SentEmail>>,
-    >,
-) -> ch_api_authenticator::services::mailer::SentEmail {
+async fn wait_for_email(outbox: &common::Outbox) -> common::CapturedEmail {
     for _ in 0..50 {
         if let Some(email) = outbox.lock().unwrap().first().cloned() {
             return email;
@@ -208,9 +204,7 @@ async fn json_malforme_400() {
 
 async fn forgot_and_capture_token(
     state: &ch_api_authenticator::state::AppState,
-    outbox: &std::sync::Arc<
-        std::sync::Mutex<Vec<ch_api_authenticator::services::mailer::SentEmail>>,
-    >,
+    outbox: &common::Outbox,
     email: &str,
 ) -> String {
     outbox.lock().unwrap().clear();

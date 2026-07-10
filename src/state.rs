@@ -7,7 +7,7 @@ use crate::repository::settings::SettingsRepository;
 use crate::repository::users::UserRepository;
 use crate::services::client_ip::TrustedProxies;
 use crate::services::jwt::JwtService;
-use crate::services::mailer::Mailer;
+use crate::services::missive::MissiveClient;
 use crate::services::rate_limit::RateLimiters;
 use crate::services::relay::RelayPublisher;
 use mongodb::Database;
@@ -31,7 +31,7 @@ pub struct AppState {
     pub refresh_tokens: RefreshTokenRepository,
     pub jwt: Arc<JwtService>,
 
-    pub mailer: Arc<Mailer>,
+    pub missive: Arc<MissiveClient>,
 
     pub relay: Arc<RelayPublisher>,
 
@@ -41,7 +41,12 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(settings: Settings, db: Database, mailer: Mailer, relay: RelayPublisher) -> Self {
+    pub fn new(
+        settings: Settings,
+        db: Database,
+        missive: MissiveClient,
+        relay: RelayPublisher,
+    ) -> Self {
         let jwt = Arc::new(JwtService::new(
             &settings.secrets.jwt_secret,
             &settings.config.token,
@@ -58,7 +63,7 @@ impl AppState {
             refresh_tokens: RefreshTokenRepository::new(&db),
             db,
             jwt,
-            mailer: Arc::new(mailer),
+            missive: Arc::new(missive),
             relay: Arc::new(relay),
             trusted_proxies,
             rate_limiters,

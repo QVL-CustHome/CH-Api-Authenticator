@@ -1,6 +1,6 @@
 pub mod client_ip;
 pub mod jwt;
-pub mod mailer;
+pub mod missive;
 pub mod password;
 pub mod rate_limit;
 pub mod relay;
