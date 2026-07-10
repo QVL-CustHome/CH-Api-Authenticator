@@ -21,14 +21,15 @@ async fn main() {
 
     init_tracing(&settings.config.server.log_level);
 
-    let mailer = match ch_api_authenticator::services::mailer::Mailer::from_settings(&settings) {
-        Ok(m) => m,
-        Err(e) => {
-            tracing::error!(error = %e, "Configuration email invalide");
-            eprintln!("Démarrage impossible — configuration email invalide : {e}");
-            std::process::exit(1);
-        }
-    };
+    let missive =
+        match services::missive::MissiveClient::new(&settings.config.missive, &settings.secrets) {
+            Ok(client) => client,
+            Err(e) => {
+                tracing::error!(error = %e, "Initialisation du client Missive impossible");
+                eprintln!("Démarrage impossible — client Missive : {e}");
+                std::process::exit(1);
+            }
+        };
 
     let db = match repository::connect(&settings.secrets.mongo_uri).await {
         Ok(db) => db,
@@ -51,7 +52,7 @@ async fn main() {
         }
     };
 
-    let state = AppState::new(settings, db, mailer, relay);
+    let state = AppState::new(settings, db, missive, relay);
 
     let indexes = async {
         state.users.ensure_indexes().await?;

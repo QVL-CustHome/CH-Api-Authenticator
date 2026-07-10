@@ -85,10 +85,10 @@ fn token_from_cookie(cookie_header: &str, cookie_name: &str) -> Option<String> {
 mod tests {
     use super::*;
     use crate::config::{
-        Config, EmailConfig, RegistrationConfig, Secrets, ServerConfig, Settings, TokenConfig,
+        Config, MissiveConfig, RegistrationConfig, Secrets, ServerConfig, Settings, TokenConfig,
     };
     use crate::domain::user::User;
-    use crate::services::mailer::Mailer;
+    use crate::services::missive::MissiveClient;
     use axum::Router;
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
@@ -108,6 +108,17 @@ mod tests {
         let db = mongodb::Client::with_options(options)
             .unwrap()
             .database("ch_auth_test_extractors");
+        let missive_config = MissiveConfig::default();
+        let secrets = Secrets {
+            jwt_secret: JWT_SECRET.to_string(),
+            internal_api_secret: "un-secret-interne-de-test-suffisamment-long!".to_string(),
+            mongo_uri: "mongodb://localhost:27017/test".to_string(),
+            admin_email: None,
+            admin_password: None,
+            missive_api_secret: "un-secret-missive-de-test".to_string(),
+            relay_jwt_private_key: None,
+        };
+        let missive = MissiveClient::new(&missive_config, &secrets).unwrap();
         AppState::new(
             Settings {
                 config: Config {
@@ -128,22 +139,11 @@ mod tests {
                         audience_budgy: "ch-api-budgy".to_string(),
                     },
                     registration: RegistrationConfig::default(),
-                    email: EmailConfig::default(),
+                    missive: missive_config,
                     password_reset: crate::config::PasswordResetConfig::default(),
                     relay: crate::config::RelayConfig::default(),
                 },
-                secrets: Secrets {
-                    jwt_secret: JWT_SECRET.to_string(),
-                    internal_api_secret: "un-secret-interne-de-test-suffisamment-long!".to_string(),
-                    mongo_uri: "mongodb://localhost:27017/test".to_string(),
-                    admin_email: None,
-                    admin_password: None,
-                    smtp_host: None,
-                    smtp_port: None,
-                    smtp_user: None,
-                    smtp_password: None,
-                    relay_jwt_private_key: None,
-                },
+                secrets,
                 rate_limit: crate::services::rate_limit::RateLimitConfig {
                     login: crate::services::rate_limit::RateLimitRule {
                         max: 5,
@@ -160,7 +160,7 @@ mod tests {
                 },
             },
             db,
-            Mailer::Dev,
+            missive,
             crate::services::relay::RelayPublisher::Disabled,
         )
     }

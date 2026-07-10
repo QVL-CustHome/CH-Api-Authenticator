@@ -123,12 +123,12 @@ pub async fn forgot(
             })?;
 
         let link = format!("{}?token={token}", state.settings.config.password_reset.url);
-        let mailer = state.mailer.clone();
+        let missive = state.missive.clone();
         let to = user.email.clone();
         let ttl_minutes = state.settings.config.password_reset.ttl_minutes;
         tokio::spawn(async move {
-            mailer
-                .send(
+            missive
+                .send_email(
                     &to,
                     "Réinitialisation de votre mot de passe CustHome",
                     &format!(

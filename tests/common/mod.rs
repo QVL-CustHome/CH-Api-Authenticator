@@ -4,12 +4,12 @@ use axum::Router;
 use axum::body::Body;
 use axum::http::{Request, StatusCode, header};
 use ch_api_authenticator::config::{
-    Config, EmailConfig, Environment, PasswordResetConfig, RegistrationConfig, Secrets,
+    Config, Environment, MissiveConfig, PasswordResetConfig, RegistrationConfig, Secrets,
     ServerConfig, Settings, TokenConfig,
 };
 use ch_api_authenticator::domain::user::User;
 use ch_api_authenticator::routes::router;
-use ch_api_authenticator::services::mailer::{Mailer, SentEmail};
+use ch_api_authenticator::services::missive::MissiveClient;
 use ch_api_authenticator::services::password;
 use ch_api_authenticator::state::AppState;
 use http_body_util::BodyExt;
@@ -51,24 +51,40 @@ pub fn state_for_db(
     cookie_secure: bool,
     default_roles: HashMap<String, Vec<String>>,
 ) -> AppState {
-    state_with_mailer(db, cookie_secure, default_roles, Mailer::Dev)
+    state_for_missive(
+        db,
+        cookie_secure,
+        default_roles,
+        MissiveConfig::default().url,
+    )
 }
 
-pub async fn test_state_with_outbox(db: &Database) -> (AppState, Arc<Mutex<Vec<SentEmail>>>) {
-    let (mailer, outbox) = Mailer::memory();
-    let state = state_with_mailer(db, false, HashMap::new(), mailer);
+pub async fn test_state_with_outbox(db: &Database) -> (AppState, Outbox) {
+    let (missive_url, outbox) = spawn_missive_mock().await;
+    let state = state_for_missive(db, false, HashMap::new(), missive_url);
     state.users.ensure_indexes().await.unwrap();
     state.roles.ensure_indexes().await.unwrap();
     state.reset_tokens.ensure_indexes().await.unwrap();
     (state, outbox)
 }
 
-pub fn state_with_mailer(
+pub fn state_for_missive(
     db: &Database,
     cookie_secure: bool,
     default_roles: HashMap<String, Vec<String>>,
-    mailer: Mailer,
+    missive_url: String,
 ) -> AppState {
+    let missive_config = MissiveConfig { url: missive_url };
+    let secrets = Secrets {
+        jwt_secret: JWT_SECRET.to_string(),
+        internal_api_secret: "un-secret-interne-de-test-suffisamment-long!".to_string(),
+        mongo_uri: "mongodb://localhost:27017/test".to_string(),
+        admin_email: None,
+        admin_password: None,
+        missive_api_secret: "un-secret-missive-de-test".to_string(),
+        relay_jwt_private_key: None,
+    };
+    let missive = MissiveClient::new(&missive_config, &secrets).unwrap();
     AppState::new(
         Settings {
             config: Config {
@@ -91,22 +107,11 @@ pub fn state_with_mailer(
                 registration: RegistrationConfig {
                     default_roles: default_roles.into_values().flatten().collect(),
                 },
-                email: EmailConfig::default(),
+                missive: missive_config,
                 password_reset: PasswordResetConfig::default(),
                 relay: ch_api_authenticator::config::RelayConfig::default(),
             },
-            secrets: Secrets {
-                jwt_secret: JWT_SECRET.to_string(),
-                internal_api_secret: "un-secret-interne-de-test-suffisamment-long!".to_string(),
-                mongo_uri: "mongodb://localhost:27017/test".to_string(),
-                admin_email: None,
-                admin_password: None,
-                smtp_host: None,
-                smtp_port: None,
-                smtp_user: None,
-                smtp_password: None,
-                relay_jwt_private_key: None,
-            },
+            secrets,
             rate_limit: ch_api_authenticator::services::rate_limit::RateLimitConfig {
                 login: ch_api_authenticator::services::rate_limit::RateLimitRule {
                     max: 5,
@@ -123,9 +128,48 @@ pub fn state_with_mailer(
             },
         },
         db.clone(),
-        mailer,
+        missive,
         ch_api_authenticator::services::relay::RelayPublisher::Disabled,
     )
+}
+
+#[derive(Clone, Debug)]
+pub struct CapturedEmail {
+    pub to: String,
+    pub subject: String,
+    pub body: String,
+}
+
+pub type Outbox = Arc<Mutex<Vec<CapturedEmail>>>;
+
+pub async fn spawn_missive_mock() -> (String, Outbox) {
+    use axum::Json;
+    use axum::routing::post;
+
+    let outbox: Outbox = Arc::new(Mutex::new(Vec::new()));
+    let captured = outbox.clone();
+    let app = axum::Router::new().route(
+        "/v1/send",
+        post(move |Json(payload): Json<serde_json::Value>| {
+            let captured = captured.clone();
+            async move {
+                captured.lock().unwrap().push(CapturedEmail {
+                    to: payload["to"].as_str().unwrap_or_default().to_string(),
+                    subject: payload["subject"].as_str().unwrap_or_default().to_string(),
+                    body: payload["text"].as_str().unwrap_or_default().to_string(),
+                });
+                Json(serde_json::json!({ "status": "sent" }))
+            }
+        }),
+    );
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    (format!("http://{addr}"), outbox)
 }
 
 pub fn broken_db() -> Database {
