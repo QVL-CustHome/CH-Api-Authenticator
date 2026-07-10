@@ -54,7 +54,7 @@ async fn parcours_nominal_register_login_validate_multi_portail() {
         "/validate",
         &[
             ("Authorization", &format!("Bearer {access_token}")),
-            (PORTAL_HEADER, "portail_a"),
+            (PORTAL_HEADER, "portail_admin"),
         ],
     )
     .await;
@@ -70,7 +70,7 @@ async fn parcours_nominal_register_login_validate_multi_portail() {
                 "Authorization",
                 &format!("Bearer {}", token_from_cookie(&cookie)),
             ),
-            (PORTAL_HEADER, "portail_a"),
+            (PORTAL_HEADER, "portail_admin"),
         ],
     )
     .await;
@@ -81,7 +81,7 @@ async fn parcours_nominal_register_login_validate_multi_portail() {
         "/validate",
         &[
             ("Authorization", &format!("Bearer {access_token}")),
-            (PORTAL_HEADER, "portail_b"),
+            (PORTAL_HEADER, "portail_drive"),
         ],
     )
     .await;
@@ -134,7 +134,7 @@ async fn parcours_whitelist_de_bout_en_bout() {
         "/validate",
         &[
             ("Authorization", &auth),
-            (PORTAL_HEADER, "portail_a"),
+            (PORTAL_HEADER, "portail_admin"),
             (CLIENT_IP_HEADER, "10.1.2.3"),
         ],
     )
@@ -227,7 +227,7 @@ async fn cascade_des_cas_d_erreur_sur_un_vrai_compte() {
         "/validate",
         &[
             ("Authorization", &format!("Bearer {token}")),
-            (PORTAL_HEADER, "portail_inexistant"),
+            (PORTAL_HEADER, "portail_admin"),
         ],
     )
     .await;
@@ -252,7 +252,7 @@ async fn compte_neuf_sans_roles_refuse_sur_tous_les_portails() {
     activate_user(&db, "neuf@custhome.fr").await;
     let token = login_token_with(&state, "neuf@custhome.fr", "Motdepasse-E2e1").await;
 
-    for portal in ["portail_a", "portail_b"] {
+    for portal in ["portail_admin", "portail_drive"] {
         let response = get(
             router(state.clone()),
             "/validate",

@@ -16,7 +16,7 @@ async fn token_valide_200_role_global_quel_que_soit_le_portail() {
     let user = seed_user(&state, "martin@test.fr", roles(&[("portail_a", "admin")])).await;
     let token = login_token(&state, "martin@test.fr").await;
 
-    for portal in ["portail_a", "portail_b", "portail_futur"] {
+    for portal in ["portail_admin", "portail_drive", "portail_home"] {
         let response = get(
             router(state.clone()),
             "/validate",
@@ -48,7 +48,7 @@ async fn aucun_role_403() {
         "/validate",
         &[
             ("Authorization", &format!("Bearer {token}")),
-            (PORTAL_HEADER, "portail_a"),
+            (PORTAL_HEADER, "portail_admin"),
         ],
     )
     .await;
@@ -181,7 +181,7 @@ async fn token_whitelist_lie_a_l_ip_de_login() {
         "/validate",
         &[
             ("Authorization", &auth),
-            (PORTAL_HEADER, "p"),
+            (PORTAL_HEADER, "portail_admin"),
             (CLIENT_IP_HEADER, "10.1.2.3"),
         ],
     )
@@ -194,7 +194,7 @@ async fn token_whitelist_lie_a_l_ip_de_login() {
         "/validate",
         &[
             ("Authorization", &auth),
-            (PORTAL_HEADER, "p"),
+            (PORTAL_HEADER, "portail_admin"),
             (CLIENT_IP_HEADER, "8.8.8.8"),
         ],
     )
@@ -204,7 +204,7 @@ async fn token_whitelist_lie_a_l_ip_de_login() {
     let sans_ip = get(
         router(state),
         "/validate",
-        &[("Authorization", &auth), (PORTAL_HEADER, "p")],
+        &[("Authorization", &auth), (PORTAL_HEADER, "portail_admin")],
     )
     .await;
     assert_eq!(sans_ip.status, StatusCode::UNAUTHORIZED);
@@ -224,7 +224,7 @@ async fn user_normal_sans_claim_ip_valide_depuis_partout() {
         "/validate",
         &[
             ("Authorization", &format!("Bearer {token}")),
-            (PORTAL_HEADER, "portail_a"),
+            (PORTAL_HEADER, "portail_admin"),
             (CLIENT_IP_HEADER, "203.0.113.50"),
         ],
     )
@@ -246,7 +246,7 @@ async fn contrat_gateway_user_id_non_vide_et_role_present() {
         "/validate",
         &[
             ("Authorization", &format!("Bearer {token}")),
-            (PORTAL_HEADER, "portail_a"),
+            (PORTAL_HEADER, "portail_admin"),
         ],
     )
     .await;

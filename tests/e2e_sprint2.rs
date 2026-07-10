@@ -90,7 +90,7 @@ async fn cycle_de_vie_complet_d_un_compte() {
     let access = login.body["access_token"].as_str().unwrap().to_string();
     let refresh = refresh_token_from_cookies(&login.set_cookies);
     assert_eq!(
-        validate_status(&state, &access, "portail_a").await,
+        validate_status(&state, &access, "portail_admin").await,
         StatusCode::OK
     );
 
@@ -113,7 +113,7 @@ async fn cycle_de_vie_complet_d_un_compte() {
     let access2 = rotated.body["access_token"].as_str().unwrap().to_string();
     let refresh2 = refresh_token_from_cookies(&rotated.set_cookies);
     assert_eq!(
-        validate_status(&state, &access2, "portail_a").await,
+        validate_status(&state, &access2, "portail_admin").await,
         StatusCode::OK
     );
 
@@ -260,7 +260,7 @@ async fn whitelist_administree_de_bout_en_bout() {
     let register = post_json(
         router(state.clone()),
         "/register",
-        r#"{"name": "Fixe", "email": "fixe@custhome.fr", "password": "Mdp-Poste-Fixe1!"}"#,
+        r#"{"name": "Fixe", "email": "fixe@custhome.fr", "password": "Mdp-Poste-Fixe1!", "accepted_terms_version": "v1"}"#,
         &[],
     )
     .await;
@@ -305,7 +305,7 @@ async fn whitelist_administree_de_bout_en_bout() {
         "/validate",
         &[
             ("Authorization", &format!("Bearer {access}")),
-            (PORTAL_HEADER, "portail_a"),
+            (PORTAL_HEADER, "portail_admin"),
             (CLIENT_IP_HEADER, "10.1.2.3"),
         ],
     )
