@@ -6,6 +6,7 @@ use std::time::Duration;
 
 pub const MIN_JWT_SECRET_BYTES: usize = 32;
 pub const MIN_INTERNAL_API_SECRET_BYTES: usize = 32;
+pub const MIN_MISSIVE_API_SECRET_BYTES: usize = 32;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -19,6 +20,8 @@ pub enum ConfigError {
         "INTERNAL_API_SECRET trop court : {0} octets (minimum {MIN_INTERNAL_API_SECRET_BYTES})"
     )]
     WeakInternalApiSecret(usize),
+    #[error("MISSIVE_API_SECRET trop court : {0} octets (minimum {MIN_MISSIVE_API_SECRET_BYTES})")]
+    WeakMissiveApiSecret(usize),
     #[error("valeur invalide pour {0} : {1}")]
     InvalidValue(&'static str, String),
 }
@@ -362,6 +365,10 @@ fn validate_secrets(secrets: &Secrets) -> Result<(), ConfigError> {
     if internal_len < MIN_INTERNAL_API_SECRET_BYTES {
         return Err(ConfigError::WeakInternalApiSecret(internal_len));
     }
+    let missive_len = secrets.missive_api_secret.len();
+    if missive_len < MIN_MISSIVE_API_SECRET_BYTES {
+        return Err(ConfigError::WeakMissiveApiSecret(missive_len));
+    }
     Ok(())
 }
 
@@ -380,7 +387,7 @@ mod tests {
             mongo_uri: "mongodb://localhost:27017/test".to_string(),
             admin_email: None,
             admin_password: None,
-            missive_api_secret: "un-secret-missive-de-test".to_string(),
+            missive_api_secret: "un-secret-missive-de-test-suffisamment-long!".to_string(),
             relay_jwt_private_key: None,
         }
     }
