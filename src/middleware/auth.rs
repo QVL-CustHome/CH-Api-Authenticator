@@ -115,7 +115,7 @@ mod tests {
             mongo_uri: "mongodb://localhost:27017/test".to_string(),
             admin_email: None,
             admin_password: None,
-            missive_api_secret: "un-secret-missive-de-test".to_string(),
+            missive_api_secret: "un-secret-missive-de-test-suffisamment-long!".to_string(),
             relay_jwt_private_key: None,
         };
         let missive = MissiveClient::new(&missive_config, &secrets).unwrap();
